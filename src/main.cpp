@@ -24,6 +24,8 @@ int main(int argc, const char **argv)
 		std::cerr << "Matrix failed to load. Aborting." << std::endl;
 		return -1;
 	}
+	
+	matrix::print(mtx);
 
 	std::cout << "Bruteforcing the solution..." << std::endl;
 

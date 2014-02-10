@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include "character.h"
 
 #include <fstream>
 #include <vector>
@@ -10,47 +11,29 @@ namespace matrix
 {
 	struct idata
 	{
-		character_state_t *allocbuf;
+		character::buf *cbuf;	
 		unsigned int pitch;
 		std::vector<std::string> c_name, t_name;
 		int maxtlen;
 	};
 	
-	character_state_t interpret(char t)
-	{
-		if (t >= '0' && t <= '9')
-			return t - '0';
-		return UNKNOWN_CHAR_VALUE;
-	}
-	
-	char uninterpret(character_state_t t)
-	{
-		if (t == UNKNOWN_CHAR_VALUE)
-			return '?';
-		else return '0' + t;
-	}
-	
 	data *setup(unsigned int taxons, unsigned int characters)
 	{
 		data *d = new data();
 		d->_id = new idata();
+
+		d->taxonbase = new character::state_t*[taxons];
+		d->_id->cbuf = character::alloc(characters, taxons, d->taxonbase);
 		
 		d->taxons = taxons;
 		d->characters = characters;
 		
-		d->_id->pitch = d->characters;
-		d->_id->allocbuf = new character_state_t[d->taxons * d->_id->pitch];
-		
-		d->taxonbase = new character_state_t*[d->taxons];
-		for (unsigned int i=0;i<d->taxons;i++)
-			d->taxonbase[i] = d->_id->allocbuf + i * d->_id->pitch;
-			
 		return d;
 	}
 	
 	void free(data *d)
 	{
-		delete [] d->_id->allocbuf;
+		character::free(d->_id->cbuf);
 		delete d->_id;
 		delete d;
 	}
@@ -121,8 +104,7 @@ namespace matrix
 			if (t[i].size() > d->_id->maxtlen)
 				d->_id->maxtlen = t[i].size();
 				
-			for (unsigned int j=0;j<c[i].size();j++)
-				d->taxonbase[i][j] = interpret(c[i][j]);
+			character::from_string(c[i].c_str(), d->taxonbase[i]);
 		}
 		
 		d->_id->t_name = t;
@@ -145,12 +127,6 @@ namespace matrix
 			return "HTA";
 	}
 
-	// if allocated as original data
-	bool contains_taxon(data *d, character_state_t *t)
-	{
-		return t >= d->_id->allocbuf && t < d->_id->allocbuf + (d->characters * d->_id->pitch); 
-	}
-
 	void print(data *d)
 	{
 		for (int i=0;i<d->taxons;i++)
@@ -160,9 +136,7 @@ namespace matrix
 			for (int j=0;j<d->_id->maxtlen-n.size();j++)
 				std::cout << " ";
 				
-			std::cout << " => ";
-			for (int k=0;k<d->characters;k++)
-				std::cout << uninterpret(d->taxonbase[i][k]);
+			std::cout << " => " << character::to_string(d->taxonbase[i], d->characters);
 			std::cout << std::endl;
 		}
 	}

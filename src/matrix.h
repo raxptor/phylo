@@ -1,22 +1,17 @@
 #ifndef __MATRIX_H__
 #define __MATRIX_H__
 
+#include "character.h"
+
 namespace matrix
 {
-	typedef unsigned char character_state_t;
-
-	enum 
-	{
-		UNKNOWN_CHAR_VALUE = 127
-	};
-
 	struct idata;
 	
 	struct data
 	{
 		unsigned int characters;
 		unsigned int taxons;
-		character_state_t **taxonbase;
+		character::state_t **taxonbase;
 		
 		// internal
 		idata *_id;
@@ -31,7 +26,6 @@ namespace matrix
 	const char *char_name(data *d, unsigned int index);
 	const char *taxon_name(data *d, unsigned int index);
 	
-	bool contains_taxon(data *d, character_state_t *t);
 }
 
 #endif
