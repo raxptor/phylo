@@ -48,6 +48,13 @@ namespace matrix
 		return d;
 	}
 	
+	void free(data *d)
+	{
+		delete [] d->_id->allocbuf;
+		delete d->_id;
+		delete d;
+	}
+	
 	data* load(const char *fn)
 	{
 		std::ifstream f(fn);
@@ -135,7 +142,13 @@ namespace matrix
 		assert(index < d->taxons);
 		return d->_id->t_name[index].c_str();
 	}
-	
+
+	// if allocated as original data
+	bool contains_taxon(data *d, character_state_t *t)
+	{
+		return t >= d->_id->allocbuf && t < d->_id->allocbuf + (d->characters * d->_id->pitch); 
+	}
+
 	void print(data *d)
 	{
 		for (int i=0;i<d->taxons;i++)

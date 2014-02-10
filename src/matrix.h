@@ -30,7 +30,8 @@ namespace matrix
 	
 	const char *char_name(data *d, unsigned int index);
 	const char *taxon_name(data *d, unsigned int index);
+	
+	bool contains_taxon(data *d, character_state_t *t);
 }
 
 #endif
-

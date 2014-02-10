@@ -1,6 +1,9 @@
 #include <iostream>
+#include <cstdlib>
 
 #include "matrix.h"
+#include "dumb.h"
+#include "tree.h"
 
 int main(int argc, const char **argv)
 {
@@ -10,6 +13,9 @@ int main(int argc, const char **argv)
 		return -1;
 	}
 	
+	if (argc > 2)
+		srand(atoi(argv[2]));
+	
 	matrix::data *mtx = matrix::load(argv[1]);
 	if (!mtx) 
 	{
@@ -17,9 +23,15 @@ int main(int argc, const char **argv)
 		return -1;
 	}
 	
-	matrix::print(mtx);
-
-	std::cout << "done." << std::endl;
-//	matrix::free(mtx);
+	tree::data *tr = dumb::make(mtx);
+	
+	if (tr)
+	{
+		tree::print_newick(tr);
+	}
+	
+	tree::free(tr);
+	matrix::free(mtx);
+	
 	return 0;
 }
