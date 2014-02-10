@@ -2,6 +2,7 @@
 #include "matrix.h"
 #include "tree.h"
 #include "newick.h"
+#include "character.h"
 
 #include <iostream>
 #include <vector>
@@ -16,6 +17,8 @@ namespace bruteforce
 		std::vector<tree::idx_t> _left;
 		long long _visited = 0;
 		bool _dontpick[1000];
+		character::distance_t _best_distance;
+		std::vector<std::string> _best_tree;
 	}
 	
 	void next_taxon();
@@ -43,6 +46,21 @@ namespace bruteforce
 	{
 		if (_left.empty())
 		{
+			if (_tree->dist > _best_distance)
+			{
+			
+			}
+			else
+			{
+				if (_tree->dist < _best_distance)
+				{
+					std::cout << " -> Best new distance " << _tree->dist << std::endl;
+					_best_tree.clear();
+					_best_distance = _tree->dist;
+				}
+				_best_tree.push_back(newick::from_tree(_tree));
+			}
+			
 			if ((_visited++ % 10000000 == 0) && _visited > 1)
 				std::cout << "...visited " << (_visited/1000000) << "M trees" << std::endl;
 				
@@ -68,6 +86,8 @@ namespace bruteforce
 	{		
 		_tree = tree::alloc(matrix);
 		_visited = 0;
+		_best_distance = 65535;
+		_best_tree.clear();
 		
 		// for now always keep the 0 as root
 		for (int i=1;i<matrix->taxons;i++)
@@ -90,6 +110,12 @@ namespace bruteforce
 		tree::free(_tree);
 		
 		std::cout << "Enumerated " << _visited << " trees." << std::endl;
+		
+		std::cout << _best_tree.size() << " trees share minimal distance " << _best_distance << std::endl;
+		for (unsigned int i=0;i<_best_tree.size() && i < 5;i++)
+		{
+			std::cout << "Tree " << i << ": " << _best_tree[i] << std::endl;
+		}
 
 /*		
 		std::set<std::string>::iterator i = _trees.begin();

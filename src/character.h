@@ -24,10 +24,11 @@ namespace character
 	const char *to_string(state_t *buf, int characters);
 	
 	//
-	distance_t distance(state_t *a, state_t *b);
+	distance_t distance(state_t *a, state_t *b, int characters);
+	void copy(state_t *target, state_t *source, int characters);
 	
 	//
-	void threesome(state_t *a, state_t *b, state_t *c, state_t *out);
+	void threesome(state_t *a, state_t *b, state_t *c, state_t *out, int characters);
 }
 
 #endif

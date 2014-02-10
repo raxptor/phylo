@@ -6,6 +6,7 @@
 #include <string>
 #include <cassert>
 #include <iostream>
+#include <sstream>
 
 namespace matrix
 {
@@ -139,5 +140,21 @@ namespace matrix
 			std::cout << " => " << character::to_string(d->taxonbase[i], d->characters);
 			std::cout << std::endl;
 		}
+		
+		std::stringstream tmp;
+		tmp.setf(std::ios::left, std::ios::adjustfield);
+
+		for (int i=0;i<d->taxons;i++)
+		{
+			for (int j=0;j<=i;j++)
+			{
+				tmp.width(4);
+				tmp << character::distance(d->taxonbase[i], d->taxonbase[j], d->characters);
+			}
+			tmp << "\n";
+		}
+		
+		std::cout << std::endl;
+		std::cout << tmp.str() << std::endl;
 	}
 }

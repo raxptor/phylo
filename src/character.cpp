@@ -57,15 +57,33 @@ namespace character
 		return tmp;
 	}
 	
-	//
-	distance_t distance(state_t *a, state_t *b)
+	void copy(state_t *target, state_t *source, int characters)
 	{
-		return 0;
+		for (int i=0;i<characters;i++)
+			target[i] = source[i];
 	}
 	
 	//
-	void threesome(state_t *a, state_t *b, state_t *c, state_t *out)
+	distance_t distance(state_t *a, state_t *b, int characters)
 	{
+		int sum = 0;
+		for (int i=0;i<characters;i++)
+		{
+			const int diff = a[i] - b[i];
+			sum += diff > 0 ? diff : -diff;
+		}
+		return sum;
+	}
 	
+	//
+	void threesome(state_t *a, state_t *b, state_t *c, state_t *out, int characters)
+	{
+		for (int i=0;i<characters;i++)
+		{
+			if (a[i] == b[i] || a[i] == c[i])
+				out[i] = a[i];
+			else
+				out[i] = b[i];
+		}
 	}
 }

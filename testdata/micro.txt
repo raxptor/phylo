@@ -1,0 +1,4 @@
+dragon     111000
+dinosaur   110000
+ranardath  000111
+rax        010110

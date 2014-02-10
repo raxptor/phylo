@@ -1,4 +1,6 @@
 #include "tree.h"
+#include "character.h"
+
 #include <cstdlib>
 #include <iostream>
 #include <vector>
@@ -21,14 +23,28 @@ namespace tree
 		d->matrix = mtx;
 		d->allocnodes = 2 * mtx->taxons - 2;
 		d->tree = new node[d->allocnodes];
+		d->characters = new character::state_t*[d->allocnodes];
+		d->cbuf = character::alloc(mtx->characters, d->allocnodes, d->characters);
+		
+		for (int i=0;i<mtx->taxons;i++)
+			character::copy(d->characters[i], mtx->taxonbase[i], mtx->characters);
 
 		// free list
+		d->dist = 0;
 		d->freecount = d->allocnodes - mtx->taxons;
 		d->freelist = new idx_t[d->freecount];
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + mtx->taxons;
 			
 		return d;
+	}
+
+	void free(data *d)
+	{
+		delete [] d->characters;
+		delete [] d->tree;
+		character::free(d->cbuf);
+		delete d;
 	}
 
 	void init(tree::data *d, idx_t taxon0, idx_t taxon1)
@@ -42,6 +58,7 @@ namespace tree
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + d->matrix->taxons;
 	
+		d->dist = character::distance(d->characters[taxon0], d->characters[taxon1], d->matrix->characters);
 		d->tree[taxon0].parent = NONE;
 		d->tree[taxon0].sibling = NONE;
 		d->tree[taxon1].parent = taxon0;
@@ -54,6 +71,8 @@ namespace tree
 	void check(tree::data *d)
 	{
 #if defined(TREEDEBUG)
+		int sum = 0;
+		int nodes = 0;	
 		for (int i=0;i<d->allocnodes;i++)
 		{
 			idx_t sib = d->tree[i].sibling;
@@ -61,6 +80,11 @@ namespace tree
 			
 			if (parent == NOT_IN_TREE)
 				continue;
+				
+			nodes++;
+			
+			if (parent >= 0 && d->tree[parent].parent != NOT_IN_TREE)
+				sum += character::distance(d->characters[i], d->characters[parent], d->matrix->characters);
 			
 			if (sib >= 0)
 			{
@@ -88,6 +112,9 @@ namespace tree
 				std::cout << i << " has parent " << parent << " which does not exist in the tree " << std::endl;
 			}
 		}
+		
+		if (sum != d->dist)
+			std::cout << "Tree distance computed to " << sum << " but tree says " << d->dist << " nodes=" << nodes << std::endl;
 #endif
 	}
 	
@@ -111,6 +138,8 @@ namespace tree
 #endif
 		
 		const idx_t n = node_alloc(d);
+		const int chars = d->matrix->characters;
+		
 
 		DPRINT(" insert(" << taxon << ") @ " << where << " newnode=" << n);
 		
@@ -125,6 +154,17 @@ namespace tree
 		d->tree[n].sibling = sib;
 		d->tree[taxon].parent = n;
 		d->tree[taxon].sibling = where;
+
+		// generate 
+		character::threesome(d->characters[par], d->characters[where], d->characters[taxon], d->characters[n], d->matrix->characters);
+
+		// maybe all of this could be merged into one calculation with the above
+		d->dist -= character::distance(d->characters[where], d->characters[par], chars);
+		d->dist += character::distance(d->characters[where], d->characters[n], chars);
+		d->dist += character::distance(d->characters[n], d->characters[par], chars);
+		d->dist += character::distance(d->characters[n], d->characters[taxon], chars);
+
+		DPRINT("     => d = " << d->dist);
 
 #if defined(TREECHECKS)		
 		if (sib >= 0 && d->tree[sib].parent != d->tree[n].parent)
@@ -177,6 +217,13 @@ namespace tree
 		d->tree[par].parent = NOT_IN_TREE;
 		d->tree[which].parent = NOT_IN_TREE;
 		node_free(d, par);
+		
+		const int chars = d->matrix->characters;
+		d->dist -= character::distance(d->characters[which], d->characters[par], chars);
+		d->dist -= character::distance(d->characters[par], d->characters[sib], chars);
+		d->dist -= character::distance(d->characters[par], d->characters[parpar], chars);
+		d->dist += character::distance(d->characters[sib], d->characters[parpar], chars);
+		DPRINT("   d => " << d->dist);	
 
 #if defined(TREECHECKS)
 		check(d);
@@ -204,9 +251,4 @@ namespace tree
 		d->freelist[d->freecount++] = where;
 	}
 	
-	void free(data *d)
-	{
-		delete [] d->tree;
-		delete d;
-	}
 }

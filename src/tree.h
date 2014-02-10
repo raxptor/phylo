@@ -2,6 +2,7 @@
 #define __TREE_H__
 
 #include "matrix.h"
+#include "character.h"
 
 namespace tree
 {
@@ -16,6 +17,7 @@ namespace tree
 	{
 		idx_t parent;
 		idx_t sibling;
+		character::distance_t sum;
 	};
 	
 	struct idata;
@@ -25,6 +27,10 @@ namespace tree
 		matrix::data *matrix;
 		node *tree;
 		
+		character::state_t **characters;
+		character::buf *cbuf;
+		
+		int dist;
 		int freecount;
 		idx_t *freelist;
 	};
