@@ -1,6 +1,16 @@
 #include "tree.h"
 #include <cstdlib>
 #include <iostream>
+#include <vector>
+
+//#define TREEDEBUG
+//#define TREECHECKS
+
+#if defined(TREEDEBUG)
+	#define DPRINT(x) { std::cout << x << std::endl; }
+#else
+	#define DPRINT(x) { }
+#endif
 
 namespace tree
 {
@@ -11,107 +21,187 @@ namespace tree
 		d->matrix = mtx;
 		d->allocnodes = 2 * mtx->taxons - 2;
 		d->tree = new node[d->allocnodes];
-		d->extra_ptr = d->allocnodes - 1;
+
+		// free list
+		d->freecount = d->allocnodes - mtx->taxons;
+		d->freelist = new idx_t[d->freecount];
+		for (unsigned int i=0;i<d->freecount;i++)
+			d->freelist[i] = i + mtx->taxons;
+			
 		return d;
 	}
 
-	void init(tree::data *d, int taxon0, int taxon1)
+	void init(tree::data *d, idx_t taxon0, idx_t taxon1)
 	{
 		int it = 0;
 		int nit = 0;
 		for (unsigned int i=0;i<d->allocnodes;i++)
-		{
 			d->tree[i].parent = NOT_IN_TREE;
-		}
+
+		d->freecount = d->allocnodes - d->matrix->taxons;
+		for (unsigned int i=0;i<d->freecount;i++)
+			d->freelist[i] = i + d->matrix->taxons;
 	
 		d->tree[taxon0].parent = NONE;
 		d->tree[taxon0].sibling = NONE;
 		d->tree[taxon1].parent = taxon0;
 		d->tree[taxon1].sibling = NONE;
 		d->nodes = 2;
-		d->extra_ptr = d->allocnodes -1;
+		
+		DPRINT("Tree starts with " << taxon0 << " and " << taxon1 << std::endl);
+	}
+
+	void check(tree::data *d)
+	{
+#if defined(TREEDEBUG)
+		for (int i=0;i<d->allocnodes;i++)
+		{
+			idx_t sib = d->tree[i].sibling;
+			idx_t parent = d->tree[i].parent;
+			
+			if (parent == NOT_IN_TREE)
+				continue;
+			
+			if (sib >= 0)
+			{
+				if (sib >= d->allocnodes)
+				{
+					std::cout << i << " has sibling " << sib << " out of range!" << std::endl;
+					continue;
+				}
+					
+				if (d->tree[sib].parent == NOT_IN_TREE)
+				{
+					std::cout << i << " has sibling (" << sib << " which does not exist" << std::endl;
+				}
+				else if (d->tree[sib].parent != NONE)
+				{
+					if (d->tree[sib].sibling != i)
+						std::cout << i << " has sibling " << sib << " which points to " << d->tree[sib].sibling << std::endl;
+					if (d->tree[sib].parent != parent)
+						std::cout << i << " has sibling " << sib << " with a different parent " << d->tree[sib].parent << " should be " << parent << std::endl;
+				}
+			}
+			
+			if (d->tree[parent].parent == NOT_IN_TREE)
+			{
+				std::cout << i << " has parent " << parent << " which does not exist in the tree " << std::endl;
+			}
+		}
+#endif
 	}
 	
-	idx_t insert(tree::data *d, int where, int taxon)
+	idx_t insert(tree::data *d, idx_t where, idx_t taxon)
 	{
-		//
-		const int p = d->tree[where].parent;
-		if (p < 0)
+		const int par = d->tree[where].parent;
+		const idx_t sib = d->tree[where].sibling;
+
+#if defined(TREECHECKS)
+		if (par < 0)
 		{
-			std::cerr << "err: insert on target node with no parent " << where << std::endl;
+			std::cerr << "err: insert " << taxon << " on target node " << where << " with no parent " << where << std::endl;
 			exit(-1);
 		}
 		
 		if (d->tree[taxon].parent != NOT_IN_TREE)
 		{
-			std::cerr << "err: taxon is already in tree" << std::endl; 
+			std::cerr << "err: taxon (" << taxon << ") is already in tree, parent=" << d->tree[taxon].parent << std::endl; 
 			exit(-1);
 		}
+#endif
 		
-		idx_t n = alloc(d);
+		const idx_t n = node_alloc(d);
+
+		DPRINT(" insert(" << taxon << ") @ " << where << " newnode=" << n);
+		
+		if (sib >= 0)
+		{
+			d->tree[sib].sibling = n;
+		}
 		
 		d->tree[where].parent = n;
 		d->tree[where].sibling = taxon;
-		d->tree[n].parent = p;
-		d->tree[n].sibling = NONE;
+		d->tree[n].parent = par;
+		d->tree[n].sibling = sib;
 		d->tree[taxon].parent = n;
 		d->tree[taxon].sibling = where;
+
+#if defined(TREECHECKS)		
+		if (sib >= 0 && d->tree[sib].parent != d->tree[n].parent)
+		{
+			std::cerr << " insert bugged out " << std::endl;
+		}
+		check(d);
+#endif
 		return n;
 	}
 	
-	int alloc(data *d)
+	void disconnect(tree::data *d, idx_t which)
 	{
-		idx_t e = d->extra_ptr;
-			
-		for (int i=0;i<d->allocnodes;i++)
+#if defined(TREECHECKS)
+		if (d->tree[which].parent < 0)
 		{
-			if (++e == d->allocnodes)
-				e = d->matrix->taxons;
-		
-			if (d->tree[e].parent == NOT_IN_TREE)
-			{
-				d->extra_ptr = e;
-				return e;
-			}
+			std::cerr << "err: cannot erase node " << which << std::endl;
+			return;
 		}
 		
-		std::cerr << "[HELP] extra alloc failed" << std::endl;
-		exit(-2);
+		if (d->tree[d->tree[which].parent].parent == NOT_IN_TREE)
+		{
+			std::cerr << "err: disconnecting node with parent not in tree (" << d->tree[which].parent << ")" << std::endl;
+			return;
+		}
+#endif
 		
-		d->extra_ptr = e;
-		return -1;
+		const idx_t sib = d->tree[which].sibling;
+		const idx_t par = d->tree[which].parent;
+		const idx_t parsib = d->tree[par].sibling;
+		const idx_t parpar = d->tree[par].parent;
+	
+		// uncomment for some tree debugging	
+		DPRINT("Erasing node " << which << " par:" << par << " sib:" << sib << " parsib:" << parsib << " parpar:" << parpar);
+		
+#if defined(TREECHECKS)
+		if (sib < 0)
+			std::cout << "no sibling here?" << std::endl;
+#endif
+
+		d->tree[sib].parent = parpar;
+		d->tree[sib].sibling = parsib;
+		
+		if (parsib >= 0)
+		{
+			d->tree[parsib].sibling = sib;
+		}
+
+		// which must a terminal node
+		d->tree[par].parent = NOT_IN_TREE;
+		d->tree[which].parent = NOT_IN_TREE;
+		node_free(d, par);
+
+#if defined(TREECHECKS)
+		check(d);
+#endif
 	}
 	
-	// this is O(n^2)!
-	std::string newick_subtree(data *d, int where)
+	inline idx_t node_alloc(data *d)
 	{
-		std::string cont("(");
-		bool first = true;
-
-		for (int i=0;i<d->allocnodes;i++)
+		if (!d->freecount)
 		{
-			if (d->tree[i].parent == where)
-			{
-				if (!first) 
-					cont.append(",");
-				else
-					first = false;
-					
-				cont.append(newick_subtree(d, i));
-			}
+			std::cerr << "[HELP] extra alloc failed" << std::endl;
+			exit(-2);
 		}
 		
-		cont.append(")");
-		
-		if (where < d->matrix->taxons)
-			cont.append(matrix::taxon_name(d->matrix, where));
-
-		return cont;		
+		return d->freelist[--d->freecount];
 	}
-
-	void print_newick(data *d)
+	
+	inline void node_free(data *d, idx_t where)
 	{
-		std::cout << "Newick: " << newick_subtree(d, 0) << ";" << std::endl;
+		if (where < d->matrix->taxons)
+		{
+			std::cerr << "Trying to free original taxon" << std::endl;
+		}
+		
+		d->freelist[d->freecount++] = where;
 	}
 	
 	void free(data *d)

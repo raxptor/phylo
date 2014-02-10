@@ -18,23 +18,26 @@ namespace tree
 		idx_t sibling;
 	};
 	
+	struct idata;
 	struct data
 	{
 		int nodes, allocnodes;
 		matrix::data *matrix;
 		node *tree;
-		idx_t *in_tree;
-		idx_t *not_in_tree;
-		idx_t extra_ptr;
+		
+		int freecount;
+		idx_t *freelist;
 	};
 	
 	data* alloc(matrix::data *mtx);
 	
-	void init(data *d, int taxon0, int taxon1);
-	idx_t insert(data *d, int where, int taxon);
-	int alloc(data *d);
-	
-	void print_newick(data *d);
+	void init(data *d, idx_t taxon0, idx_t taxon1);
+
+	idx_t insert(data *d, idx_t where, idx_t taxon);
+	void disconnect(data *d, idx_t which);
+
+	idx_t node_alloc(data *d);
+	void node_free(data *d, idx_t where);
 	
 	void free(data *d);
 }

@@ -4,6 +4,8 @@
 #include "matrix.h"
 #include "dumb.h"
 #include "tree.h"
+#include "bruteforce.h"
+#include "newick.h"
 
 int main(int argc, const char **argv)
 {
@@ -22,15 +24,21 @@ int main(int argc, const char **argv)
 		std::cerr << "Matrix failed to load. Aborting." << std::endl;
 		return -1;
 	}
-	
-	tree::data *tr = dumb::make(mtx);
-	
-	if (tr)
+
+	std::cout << "Bruteforcing the solution..." << std::endl;
+
+	tree::data *b = bruteforce::run(mtx);
+	if (b)
 	{
-		tree::print_newick(tr);
+		std::cout << " best tree => ";
+		newick::print(b);
+		tree::free(b);
+	}
+	else
+	{
+		std::cout << "No result." << std::endl;
 	}
 	
-	tree::free(tr);
 	matrix::free(mtx);
 	
 	return 0;

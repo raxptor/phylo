@@ -139,8 +139,10 @@ namespace matrix
 
 	const char *taxon_name(data *d, unsigned int index)
 	{
-		assert(index < d->taxons);
-		return d->_id->t_name[index].c_str();
+		if (index < d->taxons)
+			return d->_id->t_name[index].c_str();
+		else
+			return "HTA";
 	}
 
 	// if allocated as original data
