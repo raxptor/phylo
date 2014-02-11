@@ -21,11 +21,11 @@ namespace bruteforce
 		std::vector<std::string> _best_tree;
 	}
 	
-	void next_taxon();
+	void next_taxon(int minedge);
 	
-	void insert(tree::idx_t taxon)
+	void insert(tree::idx_t taxon, int minedge)
 	{
-		for (unsigned int i=0;i<_edges.size();i++)
+		for (unsigned int i=minedge;i<_edges.size();i++)
 		{
 			if (_edges[i] < taxon)
 				continue;
@@ -34,7 +34,7 @@ namespace bruteforce
 
 			_edges.push_back(neu);
 			_edges.push_back(taxon);
-			next_taxon();
+			next_taxon(i+1);
 			
 			_edges.pop_back();
 			_edges.pop_back();
@@ -42,7 +42,7 @@ namespace bruteforce
 		}
 	}
 	
-	void next_taxon()
+	void next_taxon(int minedge)
 	{
 		if (_left.empty())
 		{
@@ -75,7 +75,7 @@ namespace bruteforce
 			_left[i] = _left.back();
 			_left.pop_back();
 			
-			insert(which);
+			insert(which, minedge);
 			
 			_left.push_back(_left[i]);
 			_left[i] = which;
@@ -104,7 +104,7 @@ namespace bruteforce
 				if (j != i)
 					_left.push_back(j);
 			}
-			next_taxon();
+			next_taxon(0);
 		}
 		
 		tree::free(_tree);
