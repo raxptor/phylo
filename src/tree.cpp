@@ -51,8 +51,6 @@ namespace tree
 
 	void init(tree::data *d, idx_t taxon0, idx_t taxon1)
 	{
-		int it = 0;
-		int nit = 0;
 		for (unsigned int i=0;i<d->allocnodes;i++)
 			d->tree[i].parent = NOT_IN_TREE;
 

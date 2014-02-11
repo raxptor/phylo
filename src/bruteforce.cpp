@@ -16,7 +16,6 @@ namespace bruteforce
 		std::vector<tree::idx_t> _edges;
 		std::vector<tree::idx_t> _left;
 		long long _visited = 0;
-		bool _dontpick[1000];
 		character::distance_t _best_distance;
 		std::vector<std::string> _best_tree;
 	}
