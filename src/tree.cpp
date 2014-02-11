@@ -199,7 +199,7 @@ namespace tree
 	
 		// uncomment for some tree debugging	
 		DPRINT("Erasing node " << which << " par:" << par << " sib:" << sib << " parsib:" << parsib << " parpar:" << parpar);
-		
+				
 #if defined(TREECHECKS)
 		if (sib < 0)
 			std::cout << "no sibling here?" << std::endl;

@@ -98,9 +98,9 @@ namespace newick
 		return std::string("(") + subtree(d, 0) + ");";
 	}
 
-	void print(network::data *d)
+	void print(network::data *d, int root)
 	{
-		std::cout << "Newick (network r=0): " << from_network(d, 0) << std::endl;
+		std::cout << from_network(d, root) << std::endl;
 	}
 
 	void print(tree::data *d)

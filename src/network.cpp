@@ -2,6 +2,7 @@
 #include "character.h"
 
 #include <cstdlib>
+#include <cstdio>
 #include <iostream>
 #include <vector>
 
@@ -39,6 +40,21 @@ namespace network
 			d->freelist[i] = i + mtx->taxons;
 			
 		return d;
+	}
+	
+	void copy(data *target, data *source)
+	{
+		if (target->matrix != source->matrix)
+		{
+			std::cerr << "Trying to clone network with non-compatible matrices!" << std::endl;
+			exit(-2);
+		}
+	
+		memcpy(target->network, source->network, sizeof(node) * source->allocnodes);
+		character::copy(target->cbuf, source->cbuf);
+		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
+		target->freecount = source->freecount;
+		target->dist = source->dist;
 	}
 
 	void free(data *d)
@@ -167,30 +183,42 @@ namespace network
 		return n;
 	}
 	
+	void the_two_others(node *network, idx_t where, idx_t which, idx_t *r0, idx_t *r1)
+	{
+		if (network[where].c0 == which)
+		{
+			*r0 = network[where].c1;
+			*r1 = network[where].c2;
+		}
+		else if (network[where].c1 == which)
+		{
+			*r0 = network[where].c0;
+			*r1 = network[where].c2;
+		}
+		else if (network[where].c2 == which)
+		{
+			*r0 = network[where].c0;
+			*r1 = network[where].c1;
+		}
+		else
+		{
+			std::cerr << "the-two-others error: node " << which << " is no neighbour of " << where << std::endl;
+		}
+	}
+	
 	void disconnect(data *d, idx_t which)
 	{
 		node * network = d->network;
 
 		const idx_t n = network[which].c0;
 		
+		DPRINT("Disconnecting " << which << " with 'parent' " << n);
+				
 		//
 		idx_t r0, r1;
-		if (network[n].c0 == which)
-		{
-			r0 = network[n].c1;
-			r1 = network[n].c2;
-		}
-		else if (network[n].c1 == which)
-		{
-			r0 = network[n].c0;
-			r1 = network[n].c2;
-		}
-		else if (network[n].c2 == which)
-		{
-			r0 = network[n].c0;
-			r1 = network[n].c1;
-		}
+		the_two_others(network, n, which, &r0, &r1);
 		
+		DPRINT(" -> merging from " << r0 << "-" << r1 << " with " << n << " in the middle");
 		edge_merge(d->network, r0, r1, n);		
 			
 		// which must a terminal node
@@ -208,7 +236,7 @@ namespace network
 #endif
 	}
 	
-	inline idx_t node_alloc(data *d)
+	idx_t node_alloc(data *d)
 	{
 		if (!d->freecount)
 		{
@@ -219,7 +247,7 @@ namespace network
 		return d->freelist[--d->freecount];
 	}
 	
-	inline void node_free(data *d, idx_t where)
+	void node_free(data *d, idx_t where)
 	{
 		if (where < d->matrix->taxons)
 		{

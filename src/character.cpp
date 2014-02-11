@@ -8,6 +8,7 @@ namespace character
 	{
 		state_t *ptr;
 		unsigned int pitch;
+		unsigned int size;
 	};
 
 	state_t interpret(char t)
@@ -29,11 +30,17 @@ namespace character
 		buf* b = new buf();
 		b->pitch = characters;
 		b->ptr = new state_t[buffers * b->pitch];
+		b->size = buffers * b->pitch * sizeof(state_t);
 		
 		for (unsigned int i=0;i<buffers;i++)
 			out[i] = b->ptr + i * b->pitch;
 			
 		return b;
+	}
+
+	void copy(buf *dst, buf *src)
+	{
+		memcpy(dst->ptr, src->ptr, dst->size);
 	}
 	
 	void free(buf *b)

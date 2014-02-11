@@ -15,6 +15,7 @@ namespace character
 	
 	//
 	buf* alloc(unsigned int characters, unsigned int buffers, state_t **out);
+	void copy(buf *dst, buf *src);
 
 	//
 	void free(buf *b);

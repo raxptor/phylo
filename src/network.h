@@ -34,8 +34,10 @@ namespace network
 	};
 	
 	data* alloc(matrix::data *mtx);
+	void copy(data *target, data *source);
 	
 	void init(data *d, idx_t taxon0, idx_t taxon1);
+	
 	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t which);
 	void disconnect(data *d, idx_t taxon);
 	
@@ -45,6 +47,7 @@ namespace network
 	// splits edge n0,n1 and inserts newmiddle, pointing its c0 and c1 to n0 and n1
 	void edge_split(node *net, idx_t n0, idx_t n1, idx_t newmiddle);
 	void edge_merge(node *net, idx_t n0, idx_t n1, idx_t middle);
+	void the_two_others(node *network, idx_t where, idx_t which, idx_t *r0, idx_t *r1);
 	
 	void free(data *d);
 }

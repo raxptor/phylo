@@ -32,12 +32,13 @@ int main(int argc, const char **argv)
 	
 	newick::print(nw);
 
-	tbr::run(nw);
+	for (int i=0;i<2000;i++)
+		tbr::run(nw);
 
 /*
 	std::cout << "Bruteforcing the solution..." << std::endl;
 	bruteforce::run(mtx);
-*/	
+*/
 	matrix::free(mtx);
 	
 	return 0;
