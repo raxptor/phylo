@@ -14,36 +14,21 @@ namespace bruteforce
 	{
 		tree::data *_tree;
 		std::vector<tree::idx_t> _edges;
-		std::vector<tree::idx_t> _left;
 		long long _visited = 0;
 		character::distance_t _best_distance;
 		std::vector<std::string> _best_tree;
 	}
 	
-	void next_taxon(int minedge);
+	void next_taxon(int which);
 	
-	void insert(tree::idx_t taxon, int minedge)
+	void insert()
 	{
-		for (unsigned int i=minedge;i<_edges.size();i++)
-		{
-			if (_edges[i] < taxon)
-				continue;
-				
-			tree::idx_t neu = tree::insert(_tree, _edges[i], taxon);
 
-			_edges.push_back(neu);
-			_edges.push_back(taxon);
-			next_taxon(i+1);
-			
-			_edges.pop_back();
-			_edges.pop_back();
-			tree::disconnect(_tree, taxon);
-		}
 	}
 	
-	void next_taxon(int minedge)
+	void next_taxon(int which)
 	{
-		if (_left.empty())
+		if (which == _tree->mtx_taxons)
 		{
 			if (_tree->dist > _best_distance)
 			{
@@ -66,19 +51,18 @@ namespace bruteforce
 			return;
 		}
 		
-		//
-		for (int i=0;i<_left.size();i++)
+		for (unsigned int i=0;i<_edges.size();i++)
 		{
-			const tree::idx_t which = _left[i];
-
-			_left[i] = _left.back();
-			_left.pop_back();
+			tree::idx_t neu = tree::insert(_tree, _edges[i], which);
+			_edges.push_back(neu);
+			_edges.push_back(which);
 			
-			insert(which, minedge);
+			next_taxon(which+1);
 			
-			_left.push_back(_left[i]);
-			_left[i] = which;
-		}
+			_edges.pop_back();
+			_edges.pop_back();
+			tree::disconnect(_tree, which);
+		}		
 	}
 
 	tree::data* run(matrix::data *matrix)
@@ -88,23 +72,11 @@ namespace bruteforce
 		_best_distance = 65535;
 		_best_tree.clear();
 		
-		// for now always keep the 0 as root
-		for (int i=1;i<matrix->taxons;i++)
-		{
-			_left.clear();
-			_edges.clear();
-			_edges.push_back(i);
-			
-			tree::init(_tree, 0, i);
-			std::cout << "Matrix with next-pick [" << i << "] visited=" << _visited << std::endl;
-			
-			for (int j=1;j<matrix->taxons;j++)
-			{
-				if (j != i)
-					_left.push_back(j);
-			}
-			next_taxon(0);
-		}
+		tree::init(_tree, 0, 1);
+		
+		_edges.clear();
+		_edges.push_back(1);
+		next_taxon(2);
 		
 		tree::free(_tree);
 		
