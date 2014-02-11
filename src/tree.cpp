@@ -19,8 +19,9 @@ namespace tree
 	data* alloc(matrix::data *mtx)
 	{
 		data *d = new data();
-		d->nodes = 0;
 		d->matrix = mtx;
+		d->mtx_taxons = mtx->taxons;
+		d->mtx_characters = mtx->characters;
 		d->allocnodes = 2 * mtx->taxons - 2;
 		d->tree = new node[d->allocnodes];
 		d->characters = new character::state_t*[d->allocnodes];
@@ -31,6 +32,7 @@ namespace tree
 
 		// free list
 		d->dist = 0;
+		d->root = 0;
 		d->freecount = d->allocnodes - mtx->taxons;
 		d->freelist = new idx_t[d->freecount];
 		for (unsigned int i=0;i<d->freecount;i++)
@@ -58,12 +60,12 @@ namespace tree
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + d->matrix->taxons;
 	
-		d->dist = character::distance(d->characters[taxon0], d->characters[taxon1], d->matrix->characters);
+		d->dist = character::distance(d->characters[taxon0], d->characters[taxon1], d->mtx_characters);
 		d->tree[taxon0].parent = NONE;
 		d->tree[taxon0].sibling = NONE;
 		d->tree[taxon1].parent = taxon0;
 		d->tree[taxon1].sibling = NONE;
-		d->nodes = 2;
+		d->root = taxon0;
 		
 		DPRINT("Tree starts with " << taxon0 << " and " << taxon1 << std::endl);
 	}
@@ -84,7 +86,7 @@ namespace tree
 			nodes++;
 			
 			if (parent >= 0 && d->tree[parent].parent != NOT_IN_TREE)
-				sum += character::distance(d->characters[i], d->characters[parent], d->matrix->characters);
+				sum += character::distance(d->characters[i], d->characters[parent], d->mtx_characters);
 			
 			if (sib >= 0)
 			{
@@ -138,7 +140,7 @@ namespace tree
 #endif
 		
 		const idx_t n = node_alloc(d);
-		const int chars = d->matrix->characters;
+		const int chars = d->mtx_characters;
 		
 
 		DPRINT(" insert(" << taxon << ") @ " << where << " newnode=" << n);
@@ -156,7 +158,7 @@ namespace tree
 		d->tree[taxon].sibling = where;
 
 		// generate 
-		character::threesome(d->characters[par], d->characters[where], d->characters[taxon], d->characters[n], d->matrix->characters);
+		character::threesome(d->characters[par], d->characters[where], d->characters[taxon], d->characters[n], d->mtx_characters);
 
 		// maybe all of this could be merged into one calculation with the above
 		d->dist -= character::distance(d->characters[where], d->characters[par], chars);
@@ -218,7 +220,7 @@ namespace tree
 		d->tree[which].parent = NOT_IN_TREE;
 		node_free(d, par);
 		
-		const int chars = d->matrix->characters;
+		const int chars = d->mtx_characters;
 		d->dist -= character::distance(d->characters[which], d->characters[par], chars);
 		d->dist -= character::distance(d->characters[par], d->characters[sib], chars);
 		d->dist -= character::distance(d->characters[par], d->characters[parpar], chars);

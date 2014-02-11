@@ -23,7 +23,9 @@ namespace tree
 	struct idata;
 	struct data
 	{
-		int nodes, allocnodes;
+		int allocnodes;
+		int mtx_taxons, mtx_characters;
+
 		matrix::data *matrix;
 		node *tree;
 		
@@ -32,6 +34,7 @@ namespace tree
 		
 		int dist;
 		int freecount;
+		idx_t root;
 		idx_t *freelist;
 	};
 	
