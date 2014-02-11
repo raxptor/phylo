@@ -98,4 +98,19 @@ namespace character
 				out[i] = c[i];
 		}
 	}
+	
+	//
+	void toggle_boost(state_t *target, int *picks, int count)
+	{
+		// TODO: Fix this, add internal multiplier or whatever
+		for (int i=0;i<count;i++)
+		{
+			int w = picks[i];
+			if (target[w] == 1)
+				target[w] = 2;
+			else if (target[w] == 2)
+				target[w] = 1;
+		}
+	}
+	
 }

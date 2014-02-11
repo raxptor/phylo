@@ -9,12 +9,19 @@ namespace network
 	typedef int idx_t;
 	
 	enum {
-		NOT_IN_NETWORK = -1
+		NOT_IN_NETWORK = -1,
+		MAX_NODES = 2048
 	};
 	
 	struct node
 	{
 		idx_t c0, c1, c2;
+	};
+
+	struct edgelist
+	{
+		int count;
+		network::idx_t pairs[2*MAX_NODES];
 	};
 	
 	struct idata;
@@ -35,6 +42,7 @@ namespace network
 	
 	data* alloc(matrix::data *mtx);
 	void copy(data *target, data *source);
+	void recompute_dist(data *target);
 	
 	void init(data *d, idx_t taxon0, idx_t taxon1);
 	
@@ -48,7 +56,8 @@ namespace network
 	void edge_split(node *net, idx_t n0, idx_t n1, idx_t newmiddle);
 	void edge_merge(node *net, idx_t n0, idx_t n1, idx_t middle);
 	void the_two_others(node *network, idx_t where, idx_t which, idx_t *r0, idx_t *r1);
-	
+	void trace_edgelist(data *d, idx_t start, edgelist * out);	
+
 	void free(data *d);
 }
 

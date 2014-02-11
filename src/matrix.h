@@ -18,6 +18,8 @@ namespace matrix
 	};
 	
 	data* load(const char *file);
+	data *alloc(unsigned int taxons, unsigned int characters);
+	
 	void free(data *d);
 	void print(data *d);
 	

@@ -18,16 +18,18 @@ namespace matrix
 		int maxtlen;
 	};
 	
-	data *setup(unsigned int taxons, unsigned int characters)
+	data *alloc(unsigned int taxons, unsigned int characters)
 	{
 		data *d = new data();
 		d->_id = new idata();
 
 		d->taxonbase = new character::state_t*[taxons];
 		d->_id->cbuf = character::alloc(characters, taxons, d->taxonbase);
+		d->_id->maxtlen = 12;
 		
 		d->taxons = taxons;
 		d->characters = characters;
+		
 		
 		return d;
 	}
@@ -96,7 +98,7 @@ namespace matrix
 		
 		std::cout << "Loaded matrix with " << t.size() << " taxons and " << c[0].size() << " characters." << std::endl;
 		
-		data *d = setup(t.size(), c[0].size());
+		data *d = alloc(t.size(), c[0].size());
 		d->_id->maxtlen = 0;
 		
 		for (unsigned int i=0;i<t.size();i++)
@@ -114,7 +116,7 @@ namespace matrix
 	
 	const char *character_name(data *d, unsigned int index)
 	{
-		if (index < d->characters)
+		if (index < d->_id->c_name.size())
 			return d->_id->c_name[index].c_str();
 		else
 			return "no-name";
@@ -122,10 +124,10 @@ namespace matrix
 
 	const char *taxon_name(data *d, unsigned int index)
 	{
-		if (index < d->taxons)
+		if (index < d->_id->t_name.size())
 			return d->_id->t_name[index].c_str();
 		else
-			return "HTA";
+			return "no-name";
 	}
 
 	void print(data *d)

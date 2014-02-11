@@ -30,6 +30,8 @@ namespace character
 	
 	//
 	void threesome(state_t *a, state_t *b, state_t *c, state_t *out, int characters);
+	
+	void toggle_boost(state_t *target, int *picks, int count);
 }
 
 #endif

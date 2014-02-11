@@ -7,6 +7,8 @@
 #include "bruteforce.h"
 #include "newick.h"
 #include "tbr.h"
+#include "ratchet.h"
+#include "network.h"
 
 int main(int argc, const char **argv)
 {
@@ -29,12 +31,19 @@ int main(int argc, const char **argv)
 	matrix::print(mtx);
 
 	network::data *nw = dumb::make(mtx);
-	
+
+	std::cout << "Network starting dist: " << nw->dist << " => ";	
 	newick::print(nw);
 
-	for (int i=0;i<2000;i++)
-		tbr::run(nw);
+//	for (int i=0;i<2000;i++)
+//		tbr::run(nw);
 
+	for (int i=0;i<2000;i++)
+		ratchet::run(nw);
+
+	std::cout << std::endl;
+	std::cout << "Done. Best network (" << nw->dist << ") ==> ";
+	newick::print(nw);
 /*
 	std::cout << "Bruteforcing the solution..." << std::endl;
 	bruteforce::run(mtx);

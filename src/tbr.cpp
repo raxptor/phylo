@@ -15,63 +15,29 @@ namespace tbr
 		MAX_NODES	= 4096
 	};
 	
-	struct edgelist
-	{
-		int count;
-		network::idx_t pairs[2*MAX_NODES];
-	};
 	
 	struct output
 	{
 		network::data *best_network;
-		long long networks;
 	};
+	
+	long long networks = 0;
+	
+	inline void count_networks()
+	{
+		if (++networks % 10000000 == 0)
+			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
+	}
 
 	// dist overrides d->dist
 	void announce_and_copy(output *out, network::data *best, int new_dist)
 	{
-		std::cout << "Found network with distance " << new_dist << " searched=" << out->networks << " newick: ";
-		newick::print(best);
+//		std::cout << "Found network with distance " << new_dist << " searched=" << networks << " newick: ";
+//		newick::print(best);
 		network::copy(out->best_network, best);
 		out->best_network->dist = new_dist;
 	}
 
-	void trace_edgelist(network::data *d, network::idx_t start, edgelist * out)
-	{
-		network::node *net = d->network;
-		network::idx_t *outptr = out->pairs;
-		int queue = 0;
-		
-		network::idx_t toexplore[MAX_NODES];
-		network::idx_t source[MAX_NODES];
-
-		toexplore[0] = start;
-		source[0] = network::NOT_IN_NETWORK;
-		
-		while (queue >= 0)
-		{
-			const network::idx_t cur = toexplore[queue];
-			const network::idx_t src = source[queue];
-			--queue;
-
-			const network::idx_t c[3] = { net[cur].c0, net[cur].c1, net[cur].c2 };
-			
-			for (int i=0;i<3;i++)
-			{
-				if (c[i] != src && c[i] != network::NOT_IN_NETWORK)
-				{
-					outptr[0] = cur;
-					outptr[1] = c[i]; 
-					outptr += 2;
-					++queue;
-					toexplore[queue] = c[i];
-					source[queue] = cur;
-				}
-			}
-		}
-		
-		out->count = (outptr - out->pairs);
-	}
 	
 	void bisect(network::data *d, network::idx_t n0, network::idx_t n1, network::idx_t *s0, network::idx_t *s1)
 	{
@@ -138,9 +104,8 @@ namespace tbr
 	void roulette(network::data *d, network::idx_t s0, network::idx_t s1, output *out)
 	{ 		
 		DPRINT("--- Roulette starts with networks (" << s0 << ") and (" << s1 << ")" << " ---");
-		edgelist net0, net1;
-
-		trace_edgelist(d, s0, &net0);
+		network::edgelist net0, net1;
+		network::trace_edgelist(d, s0, &net0);
 
 		/*
 		DPRINT("--- Left nework ----");
@@ -153,7 +118,7 @@ namespace tbr
 			}
 		}
 		*/
-		trace_edgelist(d, s1, &net1);
+		network::trace_edgelist(d, s1, &net1);
 		
 		/*
 		DPRINT("--- Right nework ----");
@@ -238,7 +203,7 @@ namespace tbr
 				}
 				*/
 				
-				out->networks++;
+				count_networks();
 			}
 			
 			// first net's edge put back in, connections restored
@@ -252,15 +217,15 @@ namespace tbr
 	//
 	int run(network::data *d)
 	{
-		edgelist tmp;
-		trace_edgelist(d, 0, &tmp);
+		network::edgelist tmp;
+		network::trace_edgelist(d, 0, &tmp);
+		
+		character::distance_t org_dist = d->dist;
 		
 		output out;
 		out.best_network = network::alloc(d->matrix);
-		out.networks = 0;
 	
 		network::copy(out.best_network, d);
-		
 		network::data *td = network::alloc(d->matrix);
 
 		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << d->dist << " " << out.best_network->dist);
@@ -298,8 +263,8 @@ namespace tbr
 				
 
 				//			
-				edgelist np;
-				trace_edgelist(d, (taxon+1) % d->mtx_taxons, &np);
+				network::edgelist np;
+				network::trace_edgelist(d, (taxon+1) % d->mtx_taxons, &np);
 				for (int j=0;j<np.count;j+=2)
 				{
 					// this is junk from having not filled in the last nodes
@@ -311,7 +276,7 @@ namespace tbr
 						announce_and_copy(&out, d, d->dist);
 					
 					network::disconnect(d, taxon);
-					out.networks++;
+					count_networks();
 				}
 				
 				network::insert(d, r0, r1, taxon);
@@ -322,7 +287,7 @@ namespace tbr
 		network::free(out.best_network);
 		network::free(td);
 		
-		return out.networks;
+		return out.best_network->dist < org_dist;
 	}
 }
 

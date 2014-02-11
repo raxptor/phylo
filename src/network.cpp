@@ -42,19 +42,27 @@ namespace network
 		return d;
 	}
 	
+	// 
 	void copy(data *target, data *source)
 	{
-		if (target->matrix != source->matrix)
-		{
-			std::cerr << "Trying to clone network with non-compatible matrices!" << std::endl;
-			exit(-2);
-		}
-	
 		memcpy(target->network, source->network, sizeof(node) * source->allocnodes);
 		character::copy(target->cbuf, source->cbuf);
 		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
 		target->freecount = source->freecount;
 		target->dist = source->dist;
+	}
+	
+	void recompute_dist(data *target)
+	{
+		edgelist e;
+		trace_edgelist(target, 0, &e);
+		target->dist = 0;
+		for (int i=0;i<e.count;i+=2)
+		{
+			character::distance_t dist = character::distance(target->characters[e.pairs[i]], target->characters[e.pairs[i+1]], target->mtx_characters);
+			target->dist += dist;
+			DPRINT(" -> recompute dist, dist=" << dist << " for " << e.pairs[i] << "-" << e.pairs[i+1]);
+		}
 	}
 
 	void free(data *d)
@@ -256,5 +264,43 @@ namespace network
 		
 		d->freelist[d->freecount++] = where;
 	}
+
+	void trace_edgelist(data *d, idx_t start, edgelist * out)
+	{
+		node *net = d->network;
+		idx_t *outptr = out->pairs;
+		int queue = 0;
+		
+		idx_t toexplore[MAX_NODES];
+		idx_t source[MAX_NODES];
+
+		toexplore[0] = start;
+		source[0] = NOT_IN_NETWORK;
+		
+		while (queue >= 0)
+		{
+			const idx_t cur = toexplore[queue];
+			const idx_t src = source[queue];
+			--queue;
+
+			const idx_t c[3] = { net[cur].c0, net[cur].c1, net[cur].c2 };
+			
+			for (int i=0;i<3;i++)
+			{
+				if (c[i] != src && c[i] != NOT_IN_NETWORK)
+				{
+					outptr[0] = cur;
+					outptr[1] = c[i]; 
+					outptr += 2;
+					++queue;
+					toexplore[queue] = c[i];
+					source[queue] = cur;
+				}
+			}
+		}
+		
+		out->count = (outptr - out->pairs);
+	}
+
 	
 }
