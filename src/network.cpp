@@ -5,8 +5,9 @@
 #include <iostream>
 #include <vector>
 
-//#define NETWORKDEBUG
-//#define NETWORKCHECKS
+// Debug stuffs
+// #define NETWORKDEBUG
+// #define NETWORKCHECKS
 
 #if defined(NETWORKDEBUG)
 	#define DPRINT(x) { std::cout << x << std::endl; }
@@ -119,9 +120,9 @@ namespace network
 			R1->c2 = n0;
 	}
 	
-	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t taxon)
+	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t which)
 	{
-		DPRINT(" Insert " << taxon << " at " << n0 << "-" << n1);
+		DPRINT(" Insert " << which << " at " << n0 << "-" << n1);
 		
 		node * const net = d->network;
 		
@@ -131,19 +132,31 @@ namespace network
 		// insert middle		
 		edge_split(d->network, n0, n1, n);
 
-		net[n].c2 = taxon;		
-		net[taxon].c0 = n;
-		net[taxon].c1 = NOT_IN_NETWORK;
-		net[taxon].c2 = NOT_IN_NETWORK;
+		net[n].c2 = which;
+		
+		if (which < d->mtx_taxons)
+		{
+			// this will be leaf node
+			net[which].c0 = n;
+			net[which].c1 = NOT_IN_NETWORK;
+			net[which].c2 = NOT_IN_NETWORK;
+		}
+		else
+		{
+			DPRINT("     (inserting subtree)");
+			
+			// must have all the remaining connection at c1, c2
+			net[which].c0 = n;
+		}
 		
 		// generate 
-		character::threesome(d->characters[n0], d->characters[n1], d->characters[taxon], d->characters[n], d->mtx_characters);
+		character::threesome(d->characters[n0], d->characters[n1], d->characters[which], d->characters[n], d->mtx_characters);
 
 		// maybe all of this could be merged into one calculation with the above
 		d->dist -= character::distance(d->characters[n0], d->characters[n1], chars);
 		d->dist += character::distance(d->characters[n0], d->characters[n], chars);
 		d->dist += character::distance(d->characters[n], d->characters[n1], chars);
-		d->dist += character::distance(d->characters[n], d->characters[taxon], chars);
+		d->dist += character::distance(d->characters[n], d->characters[which], chars);
 
 		DPRINT("     => d = " << d->dist << " new=" << n);
 
@@ -154,25 +167,25 @@ namespace network
 		return n;
 	}
 	
-	void disconnect(data *d, idx_t taxon)
+	void disconnect(data *d, idx_t which)
 	{
 		node * network = d->network;
 
-		const idx_t n = network[taxon].c0;
+		const idx_t n = network[which].c0;
 		
 		//
 		idx_t r0, r1;
-		if (network[n].c0 == taxon)
+		if (network[n].c0 == which)
 		{
 			r0 = network[n].c1;
 			r1 = network[n].c2;
 		}
-		else if (network[n].c1 == taxon)
+		else if (network[n].c1 == which)
 		{
 			r0 = network[n].c0;
 			r1 = network[n].c2;
 		}
-		else if (network[n].c2 == taxon)
+		else if (network[n].c2 == which)
 		{
 			r0 = network[n].c0;
 			r1 = network[n].c1;
@@ -184,7 +197,7 @@ namespace network
 		node_free(d, n);
 		
 		const int chars = d->mtx_characters;
-		d->dist -= character::distance(d->characters[taxon], d->characters[n], chars);
+		d->dist -= character::distance(d->characters[which], d->characters[n], chars);
 		d->dist -= character::distance(d->characters[r0], d->characters[n], chars);
 		d->dist -= character::distance(d->characters[r1], d->characters[n], chars);
 		d->dist += character::distance(d->characters[r0], d->characters[r1], chars);

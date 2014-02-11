@@ -6,6 +6,7 @@
 #include "tree.h"
 #include "bruteforce.h"
 #include "newick.h"
+#include "tbr.h"
 
 int main(int argc, const char **argv)
 {
@@ -27,9 +28,16 @@ int main(int argc, const char **argv)
 	
 	matrix::print(mtx);
 
+	network::data *nw = dumb::make(mtx);
+	
+	newick::print(nw);
+
+	tbr::run(nw);
+
+/*
 	std::cout << "Bruteforcing the solution..." << std::endl;
 	bruteforce::run(mtx);
-	
+*/	
 	matrix::free(mtx);
 	
 	return 0;

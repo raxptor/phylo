@@ -6,7 +6,7 @@
 
 namespace network
 {
-	typedef short idx_t;
+	typedef int idx_t;
 	
 	enum {
 		NOT_IN_NETWORK = -1
@@ -20,24 +20,23 @@ namespace network
 	struct idata;
 	struct data
 	{
-		int allocnodes;
-		int mtx_taxons, mtx_characters;
-
-		matrix::data *matrix;
 		node *network;
-		
 		character::state_t **characters;
-		character::buf *cbuf;
-		
+		int mtx_taxons, mtx_characters;
 		int dist;
 		int freecount;
 		idx_t *freelist;
+
+		// never touched during processing
+		int allocnodes;
+		matrix::data *matrix;		
+		character::buf *cbuf;
 	};
 	
 	data* alloc(matrix::data *mtx);
 	
 	void init(data *d, idx_t taxon0, idx_t taxon1);
-	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t taxon);
+	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t which);
 	void disconnect(data *d, idx_t taxon);
 	
 	idx_t node_alloc(data *d);
