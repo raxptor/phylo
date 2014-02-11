@@ -73,36 +73,65 @@ namespace network
 #if defined(NETWORKDEBUG)
 #endif
 	}
+
+	// leaves c2 on newwmiddle unconnected.	
+	void edge_split(node *net, idx_t n0, idx_t n1, idx_t newmiddle)
+	{
+		node * const N0 = &net[n0];
+		node * const N1 = &net[n1];
+
+		if (N0->c0 == n1)
+			N0->c0 = newmiddle;
+		else if (N0->c1 == n1)
+			N0->c1 = newmiddle;
+		else if (N0->c2 == n1)
+			N0->c2 = newmiddle;
+			
+		if (N1->c0 == n0)
+			N1->c0 = newmiddle;
+		else if (N1->c1 == n0)
+			N1->c1 = newmiddle;
+		else if (N1->c2 == n0)
+			N1->c2 = newmiddle;
+			
+		net[newmiddle].c0 = n0;
+		net[newmiddle].c1 = n1;
+	}
 	
-	idx_t insert(network::data *d, idx_t n0, idx_t n1, idx_t taxon)
+	void edge_merge(node *net, idx_t n0, idx_t n1, idx_t middle)
+	{
+		node * const R0 = &net[n0];
+		node * const R1 = &net[n1];
+		
+		// r0 & o2 to merge
+		if (R0->c0 == middle)
+			R0->c0 = n1;
+		else if (R0->c1 == middle)
+			R0->c1 = n1;
+		else if (R0->c2 == middle)
+			R0->c2 = n1;
+
+		if (R1->c0 == middle)
+			R1->c0 = n0;
+		else if (R1->c1 == middle)
+			R1->c1 = n0;
+		else if (R1->c2 == middle)
+			R1->c2 = n0;
+	}
+	
+	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t taxon)
 	{
 		DPRINT(" Insert " << taxon << " at " << n0 << "-" << n1);
 		
-		network::node * const net = d->network;
-		network::node * const N0 = &net[n0];
-		network::node * const N1 = &net[n1];
+		node * const net = d->network;
 		
 		const idx_t n = node_alloc(d);
 		const int chars = d->mtx_characters;
-		
-		if (N0->c0 == n1)
-			N0->c0 = n;
-		else if (N0->c1 == n1)
-			N0->c1 = n;
-		else if (N0->c2 == n1)
-			N0->c2 = n;
-			
-		if (N1->c0 == n0)
-			N1->c0 = n;
-		else if (N1->c1 == n0)
-			N1->c1 = n;
-		else if (N1->c2 == n0)
-			N1->c2 = n;
-		
-		net[n].c0 = n0;
-		net[n].c1 = n1;
-		net[n].c2 = taxon;
-		
+
+		// insert middle		
+		edge_split(d->network, n0, n1, n);
+
+		net[n].c2 = taxon;		
 		net[taxon].c0 = n;
 		net[taxon].c1 = NOT_IN_NETWORK;
 		net[taxon].c2 = NOT_IN_NETWORK;
@@ -125,15 +154,11 @@ namespace network
 		return n;
 	}
 	
-	void disconnect(network::data *d, idx_t taxon)
+	void disconnect(data *d, idx_t taxon)
 	{
-		network::node * network = d->network;
-		
-		//
+		node * network = d->network;
+
 		const idx_t n = network[taxon].c0;
-		
-		// clear
-		network[taxon].c0 = NOT_IN_NETWORK;
 		
 		//
 		idx_t r0, r1;
@@ -153,23 +178,7 @@ namespace network
 			r1 = network[n].c1;
 		}
 		
-		network::node * const R0 = &network[r0];
-		network::node * const R1 = &network[r1];
-		
-		// r0 & o2 to merge
-		if (R0->c0 == n)
-			R0->c0 = r1;
-		else if (R0->c1 == n)
-			R0->c1 = r1;
-		else if (R0->c2 == n)
-			R0->c2 = r1;
-
-		if (R1->c0 == n)
-			R1->c0 = r0;
-		else if (R1->c1 == n)
-			R1->c1 = r0;
-		else if (R1->c2 == n)
-			R1->c2 = r0;
+		edge_merge(d->network, r0, r1, n);		
 			
 		// which must a terminal node
 		node_free(d, n);
