@@ -8,23 +8,29 @@ namespace newick
 	// this is O(n^2)!
 	std::string subtree(tree::data *d, int where)
 	{
-		std::string cont("(");
 		bool first = true;
 
+		std::string cont;
 		for (int i=0;i<d->allocnodes;i++)
 		{
 			if (d->tree[i].parent == where)
 			{
 				if (!first) 
+				{
 					cont.append(",");
+				}
 				else
+				{
+					cont.append("(");
 					first = false;
+				}
 					
 				cont.append(subtree(d, i));
 			}
 		}
 		
-		cont.append(")");
+		if (!first)
+			cont.append(")");
 		
 		if (where < d->matrix->taxons)
 		{

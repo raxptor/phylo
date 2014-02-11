@@ -112,16 +112,11 @@ namespace bruteforce
 		std::cout << "Enumerated " << _visited << " trees." << std::endl;
 		
 		std::cout << _best_tree.size() << " trees share minimal distance " << _best_distance << std::endl;
-		for (unsigned int i=0;i<_best_tree.size() && i < 5;i++)
+		for (unsigned int i=0;i<_best_tree.size() && i < 10;i++)
 		{
 			std::cout << "Tree " << i << ": " << _best_tree[i] << std::endl;
 		}
 
-/*		
-		std::set<std::string>::iterator i = _trees.begin();
-		while (i != _trees.end())
-			std::cout << *i++ << std::endl;
-*/
 		return 0;
 	}
 }
