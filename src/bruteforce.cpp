@@ -116,7 +116,7 @@ namespace bruteforce
 		{
 			std::cout << "Tree " << i << ": " << _best_tree[i] << std::endl;
 		}
-
+		
 		return 0;
 	}
 }

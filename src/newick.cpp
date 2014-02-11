@@ -32,6 +32,9 @@ namespace newick
 		if (!first)
 			cont.append(")");
 		
+		if (!where)
+			cont.append(",");
+		
 		if (where < d->matrix->taxons)
 		{
 			cont.append(matrix::taxon_name(d->matrix, where));
@@ -39,7 +42,7 @@ namespace newick
 		else
 		{
 			char tmp[64];
-			sprintf(tmp, "ha%d", where - d->matrix->taxons);
+			sprintf(tmp, "htu%d", where - d->matrix->taxons);
 			cont.append(tmp);
 		}
 
@@ -48,11 +51,11 @@ namespace newick
 
 	std::string from_tree(tree::data *d)
 	{
-		return subtree(d, 0);
+		return std::string("(") + subtree(d, 0) + ");";
 	}
 
 	void print(tree::data *d)
 	{
-		std::cout << "Newick: " << subtree(d, 0) << ";" << std::endl;
+		std::cout << "Newick: " << from_tree(d) << std::endl;
 	}
 }

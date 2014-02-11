@@ -28,18 +28,7 @@ int main(int argc, const char **argv)
 	matrix::print(mtx);
 
 	std::cout << "Bruteforcing the solution..." << std::endl;
-
-	tree::data *b = bruteforce::run(mtx);
-	if (b)
-	{
-		std::cout << " best tree => ";
-		newick::print(b);
-		tree::free(b);
-	}
-	else
-	{
-		std::cout << "No result." << std::endl;
-	}
+	bruteforce::run(mtx);
 	
 	matrix::free(mtx);
 	

@@ -69,8 +69,11 @@ namespace character
 		int sum = 0;
 		for (int i=0;i<characters;i++)
 		{
-			const int diff = a[i] - b[i];
-			sum += diff > 0 ? diff : -diff;
+			if (a[i] != UNKNOWN_CHAR_VALUE && b[i] != UNKNOWN_CHAR_VALUE)
+			{
+				const int diff = a[i] - b[i];
+				sum += diff > 0 ? diff : -diff;
+			}
 		}
 		return sum;
 	}
@@ -82,8 +85,10 @@ namespace character
 		{
 			if (a[i] == b[i] || a[i] == c[i])
 				out[i] = a[i];
-			else
+			else if (b[i] == c[i])
 				out[i] = b[i];
+			else
+				out[i] = c[i];
 		}
 	}
 }
