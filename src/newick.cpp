@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdlib>
 
+#include "network.h"
 #include "tree.h"
 
 namespace newick
@@ -39,14 +40,57 @@ namespace newick
 		{
 			cont.append(matrix::taxon_name(d->matrix, where));
 		}
-		else
-		{
-			char tmp[64];
-			sprintf(tmp, "htu%d", where - d->matrix->taxons);
-			cont.append(tmp);
-		}
 
 		return cont;		
+	}
+	
+	std::string subnet(network::data *d, int where, int from, bool isroot = true)
+	{
+		network::idx_t c[3];
+		c[0] = d->network[where].c0;
+		c[1] = d->network[where].c1;
+		c[2] = d->network[where].c2;
+
+		std::string cont;
+		bool first = true;
+		char tmp[64];
+
+		for (int i=0;i<3;i++)
+		{
+			if (c[i] != from && c[i] != network::NOT_IN_NETWORK)
+			{
+				if (!first)
+				{
+					cont.append(",");
+				}
+				else
+				{
+					cont.append("(");
+					first = false;
+				}
+				
+				cont.append(subnet(d, c[i], where, false));
+			}
+		}
+
+		if (!first)
+			cont.append(")");
+		
+		if (isroot)
+			cont.append(",");
+		
+		if (where < d->matrix->taxons)
+		{
+			cont.append(matrix::taxon_name(d->matrix, where));
+		}
+		
+		return cont;
+	}
+	
+	
+	std::string from_network(network::data *d, int root)
+	{
+		return std::string("(") + subnet(d, root, network::NOT_IN_NETWORK, true) + ");";
 	}
 
 	std::string from_tree(tree::data *d)
@@ -54,8 +98,13 @@ namespace newick
 		return std::string("(") + subtree(d, 0) + ");";
 	}
 
+	void print(network::data *d)
+	{
+		std::cout << "Newick (network r=0): " << from_network(d, 0) << std::endl;
+	}
+
 	void print(tree::data *d)
 	{
-		std::cout << "Newick: " << from_tree(d) << std::endl;
+		std::cout << "Newick (tree): " << from_tree(d) << std::endl;
 	}
 }

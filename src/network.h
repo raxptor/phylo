@@ -1,5 +1,5 @@
-#ifndef __TREE_H__
-#define __TREE_H__
+#ifndef __NETWORK_H__
+#define __NETWORK_H__
 
 #include "matrix.h"
 #include "character.h"

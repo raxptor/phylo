@@ -40,7 +40,7 @@ namespace bruteforce
 					_best_network.clear();
 					_best_distance = _network->dist;
 				}
-				// _best_network.push_back(newick::from_network(_network));
+				_best_network.push_back(newick::from_network(_network, 0));
 			}
 			
 			if ((_visited++ % 10000000 == 0) && _visited > 1)

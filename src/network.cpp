@@ -92,7 +92,7 @@ namespace network
 		else if (N0->c2 == n1)
 			N0->c2 = n;
 			
-		else if (N1->c0 == n0)
+		if (N1->c0 == n0)
 			N1->c0 = n;
 		else if (N1->c1 == n0)
 			N1->c1 = n;
@@ -104,6 +104,8 @@ namespace network
 		net[n].c2 = taxon;
 		
 		net[taxon].c0 = n;
+		net[taxon].c1 = NOT_IN_NETWORK;
+		net[taxon].c2 = NOT_IN_NETWORK;
 		
 		// generate 
 		character::threesome(d->characters[n0], d->characters[n1], d->characters[taxon], d->characters[n], d->mtx_characters);
@@ -114,7 +116,7 @@ namespace network
 		d->dist += character::distance(d->characters[n], d->characters[n1], chars);
 		d->dist += character::distance(d->characters[n], d->characters[taxon], chars);
 
-		DPRINT("     => d = " << d->dist);
+		DPRINT("     => d = " << d->dist << " new=" << n);
 
 #if defined(NETWORKCHECKS)		
 		check(d);
