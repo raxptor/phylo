@@ -23,10 +23,10 @@ namespace optimize
 		int root;
 		int character;
 		char *bmp;
-		character::state_t **cdata;
 		network::node *net;
 		int sum;
 		int taxons;
+		character::state_t cval[1024];
 	};
 
 	void copy(optstate *target, optstate *source)
@@ -101,8 +101,8 @@ namespace optimize
 		
 		if (w < s->taxons && w != s->root)
 		{
-			DPRINT("mask[" << w << "] is " << (int)mask(s->cdata[w][s->character]));
-			return mask(s->cdata[w][s->character]);
+			DPRINT("mask[" << w << "] is " << (int)mask(s->cval[w]));
+			return mask(s->cval[w]);
 		}
 			
 		char a = collect_two(s, s->net[w].c1);
@@ -129,13 +129,13 @@ namespace optimize
 			
 		if (w < s->taxons)
 		{
-			if (s->cdata[w][s->character] == character::UNKNOWN_CHAR_VALUE)
+			if (s->cval[w] == character::UNKNOWN_CHAR_VALUE)
 				return;
 				
-			if (value != s->cdata[w][s->character])
+			if (value != s->cval[w])
 			{
-				DPRINT("step from " << int(value) << " to " << int(s->cdata[w][s->character]));
-				s->sum += dist(value, s->cdata[w][s->character]);;
+				DPRINT("step from " << int(value) << " to " << int(s->cval[w]));
+				s->sum += dist(value, s->cval[w]);
 			}
 			return;
 		}
@@ -145,7 +145,7 @@ namespace optimize
 		{
 			// definite value
 			DPRINT("writing single value " << (int)sv << " because mask " << (int)s->bmp[w]);
-			s->cdata[w][s->character] = sv;
+			s->cval[w] = sv;
 			if (sv != value)
 			{
 				DPRINT("step from " << (int)sv << " to " << (int)value);
@@ -159,7 +159,7 @@ namespace optimize
 			{
 				DPRINT("writing single value " << (int)value << " because it matched the mask " << (int)s->bmp[w]);
 			
-				s->cdata[w][s->character] = value;
+				s->cval[w] = value;
 			}
 			else
 			{
@@ -167,21 +167,21 @@ namespace optimize
 				{
 					if (mask(i) & s->bmp[w])
 					{
-						s->cdata[w][s->character] = i;
+						s->cval[w] = i;
 						break;
 					}
 				}
 			}
 		}
 		
-		if (value != character::UNKNOWN_CHAR_VALUE && value != s->cdata[w][s->character])
+		if (value != character::UNKNOWN_CHAR_VALUE && value != s->cval[w])
 		{
-			DPRINT("step from " << int(value) << " to " << int(s->cdata[w][s->character]));
-			s->sum += dist(value, s->cdata[w][s->character]);
+			DPRINT("step from " << int(value) << " to " << int(s->cval[w]));
+			s->sum += dist(value, s->cval[w]);
 		}
 		
-		push_down(s, s->net[w].c1, s->cdata[w][s->character]);
-		push_down(s, s->net[w].c2, s->cdata[w][s->character]);
+		push_down(s, s->net[w].c1, s->cval[w]);
+		push_down(s, s->net[w].c2, s->cval[w]);
 	}
 	
 	void run_character(network::data *data, optstate *s, int i)
@@ -189,30 +189,33 @@ namespace optimize
 		s->sum = 0;
 		s->character = i;
 		
-		memset(s->bmp, 0x00, data->allocnodes);
 		collect_two(s, s->root);
-		s->bmp[s->root] = mask(s->cdata[s->root][i]);
-		push_down(s, s->net[s->root].c1, s->cdata[s->root][i]);
-		push_down(s, s->net[s->root].c2, s->cdata[s->root][i]);
+		s->bmp[s->root] = mask(s->cval[s->root]);
+		push_down(s, s->net[s->root].c1, s->cval[s->root]);
+		push_down(s, s->net[s->root].c2, s->cval[s->root]);
 		data->opt->chars[i].sum = s->sum;
 	}
 	
 	character::distance_t optimize(network::data *data, bool all_chars)
 	{
 		DPRINT("Treeifying network...");
-		
 		optstate & s = *(data->opt);
 		
 		// unnecessary but why not
 		s.root = 0;
 		s.taxons = data->mtx_taxons;
-		s.cdata = data->characters;
 
 		network::treeify(data, 0, s.net);
 		
+		
 		int count = 0;
 		for (int i=0;i<data->mtx_characters;i++)
+		{
+			for (int j=0;j<data->mtx_taxons;j++)
+				s.cval[j] = data->characters[j][i];
+		
 			run_character(data, &s, i);
+		}
 		
 		DPRINT("Recomputed " << count << " characters");
 		
@@ -221,16 +224,6 @@ namespace optimize
 			sum += data->opt->chars[i].sum;
 
 		DPRINT("  [opt] - prevdist=" << data->dist << " newdist=" << sum);
-			
-		if (sum != network::distance_by_edges(data))
-		{
-			std::cerr << " optimizer calculated wrong sum (" << sum << ") but (" << data->dist << ") if inf loop here then full recald didn't help" << std::endl;
-			optimize(data, true);
-			std::cerr << "  but fixed when all were redirtified" << std::endl;
-			
-			exit(1);
-		}
-		
 		return sum;
 	}
 }
