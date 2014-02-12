@@ -5,7 +5,12 @@ namespace network { struct data; }
 
 namespace tbr
 {
-	int run(network::data *net);
+	struct output
+	{
+		network::data *best_network;
+	};
+
+	int run(network::data *net, output *out);
 }
 
 #endif

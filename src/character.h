@@ -5,7 +5,7 @@ namespace character
 {
 	enum 
 	{
-		UNKNOWN_CHAR_VALUE = 127
+		UNKNOWN_CHAR_VALUE = 4
 	};
 
 	typedef unsigned char state_t;
@@ -19,6 +19,7 @@ namespace character
 
 	//
 	void free(buf *b);
+	void init();
 
 	// parse from string like 0120301230?123
 	void from_string(const char *str, state_t *out);

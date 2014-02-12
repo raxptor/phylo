@@ -38,6 +38,7 @@ namespace network
 		int allocnodes;
 		matrix::data *matrix;		
 		character::buf *cbuf;
+		character::distance_t *dist_cache;
 	};
 	
 	data* alloc(matrix::data *mtx);

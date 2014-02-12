@@ -15,12 +15,6 @@ namespace tbr
 		MAX_NODES	= 4096
 	};
 	
-	
-	struct output
-	{
-		network::data *best_network;
-	};
-	
 	long long networks = 0;
 	
 	inline void count_networks()
@@ -32,8 +26,6 @@ namespace tbr
 	// dist overrides d->dist
 	void announce_and_copy(output *out, network::data *best, int new_dist)
 	{
-//		std::cout << "Found network with distance " << new_dist << " searched=" << networks << " newick: ";
-//		newick::print(best);
 		network::copy(out->best_network, best);
 		out->best_network->dist = new_dist;
 	}
@@ -215,20 +207,16 @@ namespace tbr
 	}
 
 	//
-	int run(network::data *d)
+	int run(network::data *d, output * out)
 	{
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
 		
 		character::distance_t org_dist = d->dist;
 		
-		output out;
-		out.best_network = network::alloc(d->matrix);
-	
-		network::copy(out.best_network, d);
 		network::data *td = network::alloc(d->matrix);
 
-		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << d->dist << " " << out.best_network->dist);
+		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << d->dist << " " << out->best_network->dist);
 		
 		for (int i=0;i<tmp.count;i+=2)
 		{
@@ -239,7 +227,7 @@ namespace tbr
 				network::copy(td, d);
 				network::idx_t s0, s1;
 				bisect(td, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
-				roulette(td, s0, s1, &out);
+				roulette(td, s0, s1, out);
 			}
 			else
 			{
@@ -272,8 +260,8 @@ namespace tbr
 					DPRINT("Re-inserting taxon " << np.pairs[j] << " " << np.pairs[j+1]);
 					network::insert(d, np.pairs[j], np.pairs[j+1], taxon);
 					
-					if (d->dist < out.best_network->dist)
-						announce_and_copy(&out, d, d->dist);
+					if (d->dist < out->best_network->dist)
+						announce_and_copy(out, d, d->dist);
 					
 					network::disconnect(d, taxon);
 					count_networks();
@@ -283,11 +271,10 @@ namespace tbr
 			}
 		}
 		
-		network::copy(d, out.best_network);
-		network::free(out.best_network);
+		network::copy(d, out->best_network);
 		network::free(td);
 		
-		return out.best_network->dist < org_dist;
+		return out->best_network->dist < org_dist;
 	}
 }
 

@@ -10,6 +10,20 @@ namespace character
 		unsigned int pitch;
 		unsigned int size;
 	};
+	
+	static const state_t res[8] = {
+		0, 1, 2, 1,
+		0, 0, 0, 0
+	};
+	
+	static distance_t res8[256];
+	
+	void init()
+	{
+		for (int i=0;i<8;i++)
+			for (int j=0;j<8;j++)
+				res8[i*16+j] = res[i] + res[j];
+	}
 
 	state_t interpret(char t)
 	{
@@ -28,9 +42,11 @@ namespace character
 	buf* alloc(unsigned int characters, unsigned int buffers, state_t **out)
 	{
 		buf* b = new buf();
-		b->pitch = characters;
+		b->pitch = 4*((characters + 5)/4);
 		b->ptr = new state_t[buffers * b->pitch];
 		b->size = buffers * b->pitch * sizeof(state_t);
+		
+		memset(b->ptr, 0x00, sizeof(state_t) * buffers * b->pitch);
 		
 		for (unsigned int i=0;i<buffers;i++)
 			out[i] = b->ptr + i * b->pitch;
@@ -74,14 +90,13 @@ namespace character
 	distance_t distance(state_t *a, state_t *b, int characters)
 	{
 		int sum = 0;
-		for (int i=0;i<characters;i++)
+		for (int i=0;i<characters;i+=2)
 		{
-			if (a[i] != UNKNOWN_CHAR_VALUE && b[i] != UNKNOWN_CHAR_VALUE)
-			{
-				const int diff = a[i] - b[i];
-				sum += diff > 0 ? diff : -diff;
-			}
+			const int _a = a[i] + (a[i+1] << 4);
+			const int _b = b[i] + (b[i+1] << 4);
+			sum += res8[_a^_b];
 		}
+			
 		return sum;
 	}
 	

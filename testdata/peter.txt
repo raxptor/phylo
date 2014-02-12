@@ -1,0 +1,7 @@
+dragon     111000
+dinosaur   110000
+peter      000111
+dan        010110
+fuckit     000111
+fish       011001
+sl         111110

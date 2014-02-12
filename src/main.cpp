@@ -21,6 +21,8 @@ int main(int argc, const char **argv)
 	if (argc > 2)
 		srand(atoi(argv[2]));
 	
+	character::init();
+	
 	matrix::data *mtx = matrix::load(argv[1]);
 	if (!mtx) 
 	{
@@ -30,20 +32,29 @@ int main(int argc, const char **argv)
 	
 	matrix::print(mtx);
 
-	network::data *nw = dumb::make(mtx);
+	const int num = 10;
+	network::data* nw[num];
+	for (int i=0;i<num;i++)
+		nw[i] = dumb::make(mtx);
 
-	std::cout << "Network starting dist: " << nw->dist << " => ";	
-	newick::print(nw);
+	tbr::output out;
+	out.best_network = network::alloc(mtx);
+	network::copy(out.best_network, nw[0]);
 
-//	for (int i=0;i<2000;i++)
-//		tbr::run(nw);
-
-	for (int i=0;i<2000;i++)
-		ratchet::run(nw);
+	int rot = 0;
+	for (int i=0;i<10000;i++)
+	{
+		for (int j=0;j<num;j++)
+			ratchet::run(nw[j], &out);
+			
+		rot = (rot + 1) % num;
+		if (nw[rot]->dist >= out.best_network->dist)
+			dumb::make_inplace(nw[rot]);
+	}
 
 	std::cout << std::endl;
-	std::cout << "Done. Best network (" << nw->dist << ") ==> ";
-	newick::print(nw);
+	std::cout << "Done. Best network (" << out.best_network->dist << ") ==> ";
+	newick::print(out.best_network);
 /*
 	std::cout << "Bruteforcing the solution..." << std::endl;
 	bruteforce::run(mtx);
