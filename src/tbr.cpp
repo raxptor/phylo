@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iostream>
 #include <mtw/mersenne-twister.h>
+#include <cstdlib>
 
 namespace tbr
 {	

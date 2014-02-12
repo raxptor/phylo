@@ -37,7 +37,7 @@ extern "C" {
  * Initialize the number generator with given seed.
  * (LIBC REPLACEMENT FUNCTION)
  */
-void srand(unsigned seed_value);
+void mtw_srand(unsigned seed_value);
 
 /*
  * Extract a pseudo-random unsigned 32-bit integer in the range 0 ... UINT32_MAX
@@ -52,7 +52,7 @@ uint64_t rand_u64();
 /*
  * Initialize Mersenne Twister with given seed value.
  */
-void seed(uint32_t seed_value);
+void mtw_seed(uint32_t seed_value);
 
 /*
  * Return a random float in the CLOSED range [0, 1]

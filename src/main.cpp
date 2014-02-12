@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
 
 #include "matrix.h"
 #include "dumb.h"
@@ -27,7 +28,7 @@ int main(int argc, const char **argv)
 	const char *method = 0;
 	const char *print = 0;
 	
-	seed(0);
+	mtw_seed(0);
 	
 	// arguments with arguments
 	int c;
@@ -40,7 +41,7 @@ int main(int argc, const char **argv)
 		}
 		else if (!strcmp(argv[c], "--seed"))
 		{
-			seed(atoi(argv[2]));
+			mtw_seed(atoi(argv[2]));
 			c++;
 		}
 		else if (!strcmp(argv[c], "--print"))

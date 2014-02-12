@@ -107,7 +107,7 @@ static inline void generate_numbers()
   MT[SIZE-1] = MT[PERIOD-1] ^ (y>>1) ^ MATRIX[ODD(y)];
 }
 
-extern "C" void seed(uint32_t value)
+extern "C" void mtw_seed(uint32_t value)
 {
   /*
    * The equation below is a linear congruential generator (LCG),
@@ -187,9 +187,9 @@ extern "C" int rand()
   return static_cast<int>(0x7FFFFFFF & rand_u32());
 }
 
-extern "C" void srand(unsigned value)
+extern "C" void mtw_srand(unsigned value)
 {
-  seed(static_cast<uint32_t>(value));
+  mtw_seed(static_cast<uint32_t>(value));
 }
 
 extern "C" float randf_cc()
