@@ -3,6 +3,7 @@
 #include "network.h"
 #include "newick.h"
 #include "character.h"
+#include "dumb.h"
 
 #include <iostream>
 #include <vector>
@@ -54,27 +55,30 @@ namespace bruteforce
 			edge tmp = _edges[i];
 			network::idx_t neu = network::insert(_network, _edges[i].n0, _edges[i].n1, which);
 			
-			_edges[i].n0 = tmp.n0;
-			_edges[i].n1 = neu;
-			
-			edge e1;
-			e1.n0 = which;
-			e1.n1 = neu;
-			
-			edge e2;
-			e2.n0 = neu;
-			e2.n1 = tmp.n1;
-			
-			_edges.push_back(e1);
-			_edges.push_back(e2);
-			
-			next_taxon(which+1);
-			
-			_edges.pop_back();
-			_edges.pop_back();
+			if (_network->dist < _best_distance)
+			{
+				_edges[i].n0 = tmp.n0;
+				_edges[i].n1 = neu;
+				
+				edge e1;
+				e1.n0 = which;
+				e1.n1 = neu;
+				
+				edge e2;
+				e2.n0 = neu;
+				e2.n1 = tmp.n1;
+				
+				_edges.push_back(e1);
+				_edges.push_back(e2);
+				
+				next_taxon(which+1);
+				
+				_edges.pop_back();
+				_edges.pop_back();
 
-			// restore			
-			_edges[i] = tmp;
+				// restore			
+				_edges[i] = tmp;
+			}
 			network::disconnect(_network, which);
 		}		
 	}
@@ -83,9 +87,25 @@ namespace bruteforce
 	{		
 		_network = network::alloc(matrix);
 		_visited = 0;
-		_best_distance = 65535;
+		_best_distance = 6553500;
 		_best_network.clear();
 		
+		// make a few random for some kind of bound
+		
+		network::init(_network, 0, 1);
+		
+		for (int i=0;i<16;i++)
+		{
+			dumb::make_inplace(_network);
+			if (i == 0 || _network->dist < _best_distance)
+			{
+				_best_network.clear();
+				_best_network.push_back(newick::from_network(_network, 0));
+				_best_distance = _network->dist;
+			}
+		}
+		
+		std::cout << "Starting brute force search (branch & bound) with start dist = " << _best_distance << std::endl;
 		network::init(_network, 0, 1);
 		
 		_edges.clear();

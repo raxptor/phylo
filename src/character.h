@@ -9,7 +9,7 @@ namespace character
 	};
 
 	typedef unsigned char state_t;
-	typedef unsigned short distance_t;
+	typedef int distance_t;
 	
 	struct buf;
 	

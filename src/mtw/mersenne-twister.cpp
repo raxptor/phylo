@@ -25,7 +25,9 @@
 
 #include "mersenne-twister.h"
 
+#if !defined(UINT32_MAX)
 #define UINT32_MAX  (0xffffffff)
+#endif
 
 /*
  * We have an array of 624 32-bit values, and there are
