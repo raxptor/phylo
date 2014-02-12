@@ -23,6 +23,9 @@ namespace optimize
 
 	char mask(int val)
 	{
+		if (val == character::UNKNOWN_CHAR_VALUE)
+			return 0x1f;
+			
 		return 1 << val;
 	}
 
@@ -76,7 +79,7 @@ namespace optimize
 		else
 		{
 			char mv = mask(value);
-			if (mv & s->bmp[w])
+			if (mv & s->bmp[w] && value != character::UNKNOWN_CHAR_VALUE)
 			{
 				s->cdata[w][s->character] = value;
 			}
@@ -86,8 +89,6 @@ namespace optimize
 					if (mask(i) & s->bmp[w])
 					{
 						s->cdata[w][s->character] = i;
-						if (i == 31)
-							std::cout << "Found nothing!" << std::endl;
 						break;
 					}
 			}
@@ -99,18 +100,18 @@ namespace optimize
 	void optimize(network::data *data)
 	{
 		DPRINT("Treeifying network...");
-		network::treeify(data, 0);
 		
 		state s;
 		s.bmp = new char[data->allocnodes];
+		s.net = new network::node[data->allocnodes];
+		network::treeify(data, 0, s.net);
 		
 		for (int i=0;i<256;i++)
 			is_single[i] = -1;
-		for (int i=0;i<8;i++)
+		for (int i=0;i<5;i++)
 			is_single[0 << i] = i;
 			
 		s.root = 0;
-		s.net = data->network;
 		s.taxons = data->mtx_taxons;
 		s.cdata = data->characters;
 
@@ -124,9 +125,10 @@ namespace optimize
 			push_down(&s, s.net[s.root].c2, s.cdata[s.root][i]);
 		}
 		
+		delete[] s.net;
 		delete[] s.bmp;
-//		std::cout << "Previous distance:" << data->dist << std::endl;
+		
+		int d = data->dist;		
 		network::recompute_dist(data);
-//		std::cout << "New distance:" << data->dist << std::endl;
 	}
 }

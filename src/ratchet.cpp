@@ -16,10 +16,7 @@ namespace ratchet
 {
 	void run(network::data *d, tbr::output *out)
 	{
-		int boosts = rand_u32() % (d->mtx_characters / 2 + 1) + 1;
-		
-//		std::cout << "Starting network with " << boosts << " boosts at d " << d->dist << std::endl;
-	
+		int boosts = rand_u32() % (d->mtx_characters / 10 + 1) + 1;
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
 			picks[i] = rand_u32() % d->mtx_characters;
@@ -42,7 +39,7 @@ namespace ratchet
 		tout.best_network = network::alloc(d->matrix);
 		network::copy(tout.best_network, new_net);
 
-		for (int i=0;i<50;i++)
+		for (int i=0;i<200;i++)
 			if (!tbr::run(new_net, &tout))
 				break;
 
@@ -64,7 +61,7 @@ namespace ratchet
 		const character::distance_t prestore = out->best_network->dist;
 		
 		// run again (no temp out this time)
-		for (int i=0;i<50;i++)
+		for (int i=0;i<200;i++)
 			if (!tbr::run(new_net, out))
 				break;
 

@@ -2,7 +2,7 @@
 #include "network.h"
 #include "newick.h"
 #include "character.h"
-
+#include "optimize.h"
 #include <cstring>
 #include <iostream>
 #include <mtw/mersenne-twister.h>
@@ -268,7 +268,8 @@ namespace tbr
 
 					DPRINT("Re-inserting taxon " << np.pairs[j] << " " << np.pairs[j+1]);
 					network::insert(d, np.pairs[j], np.pairs[j+1], taxon);
-					
+					optimize::optimize(d);
+
 					if (d->dist < out->best_network->dist)
 						announce_and_copy(out, d, d->dist);
 					

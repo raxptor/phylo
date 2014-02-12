@@ -41,7 +41,7 @@ namespace bruteforce
 					_best_network.clear();
 					_best_distance = _network->dist;
 					newick::print(_network);
-					// network::print_characters(_network);
+					network::print_characters(_network);
 				}
 				_best_network.push_back(newick::from_network(_network, 0));
 			}

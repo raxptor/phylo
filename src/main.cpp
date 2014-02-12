@@ -93,7 +93,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 10;
+		const int num = 4;
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = dumb::make(mtx);
@@ -102,21 +102,20 @@ int main(int argc, const char **argv)
 		out.best_network = network::alloc(mtx);
 		network::copy(out.best_network, nw[0]);
 
-		int rot = 0;
 		for (int i=0;i<10000;i++)
 		{
 			for (int j=0;j<num;j++)
 			{
 				ratchet::run(nw[j], &out);
 			}
+
+
+			// eliminate dupes						
+			for (int i=0;i<num;i++)
+				for (int j=i+1;j<num;j++)
+					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
+						dumb::make_inplace(nw[j]);
 				
-			rot = (++rot) % num;
-			
-			if (nw[rot]->dist >= out.best_network->dist)
-			{
-				if (newick::from_network(nw[rot], 0) != newick::from_network(out.best_network, 0))
-					dumb::make_inplace(nw[rot]);
-			}
 		}
 
 		std::cout << std::endl;

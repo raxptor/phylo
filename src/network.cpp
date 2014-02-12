@@ -352,9 +352,13 @@ namespace network
 		out->count = (outptr - out->pairs);
 	}
 	
-	void treeify(network::data *data, idx_t root)
+	void treeify(network::data *data, idx_t root, node *out)
 	{
 		node *net = data->network;
+		
+		if (!out)
+			out = net;
+			
 		int queue = 0;
 		
 		idx_t toexplore[MAX_NODES];
@@ -370,10 +374,12 @@ namespace network
 			--queue;
 				
 			// always make c0 point upwards
-			if (net[cur].c1 == src)
-				std::swap(net[cur].c0, net[cur].c1);
-			else if (net[cur].c2 == src)
-				std::swap(net[cur].c0, net[cur].c2);
+			out[cur] = net[cur];
+			
+			if (out[cur].c1 == src)
+				std::swap(out[cur].c0, out[cur].c1);
+			else if (out[cur].c2 == src)
+				std::swap(out[cur].c0, out[cur].c2);
 				
 			const idx_t c[3] = { net[cur].c0, net[cur].c1, net[cur].c2 };
 			for (int i=0;i<3;i++)
