@@ -58,6 +58,8 @@ namespace network
 	void edge_merge(node *net, idx_t n0, idx_t n1, idx_t middle);
 	void the_two_others(node *network, idx_t where, idx_t which, idx_t *r0, idx_t *r1);
 	void trace_edgelist(data *d, idx_t start, edgelist * out);	
+	
+	void print_characters(data *d);
 
 	void free(data *d);
 }

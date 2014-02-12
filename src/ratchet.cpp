@@ -15,7 +15,7 @@ namespace ratchet
 {
 	void run(network::data *d, tbr::output *out)
 	{
-		int boosts = rand() % d->mtx_characters;
+		int boosts = rand() % (d->mtx_characters / 5 + 1) + 1;
 		
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
@@ -33,10 +33,11 @@ namespace ratchet
 			
 		// set up temporary output structure for tbr, we won't record any of these
 		// networks as final		
+
 		tbr::output tout;
 		tout.best_network = network::alloc(d->matrix);
 		network::copy(tout.best_network, new_net);
-		
+
 		for (int i=0;i<100;i++)
 			if (!tbr::run(new_net, &tout))
 				break;
@@ -45,7 +46,7 @@ namespace ratchet
 
 		// un-do boost
 		for (int i=0;i<d->allocnodes;i++)
-			character::toggle_boost(new_net->characters[i], picks, boosts);	
+			character::toggle_boost(new_net->characters[i], picks, boosts);
 		network::recompute_dist(new_net);	
 		
 		if (new_net->dist < out->best_network->dist)

@@ -30,8 +30,13 @@ namespace tbr
 	{
 		network::copy(out->best_network, best);
 		out->best_network->dist = new_dist;
+		network::recompute_dist(out->best_network);
+		if (out->best_network->dist != new_dist)
+		{
+			std::cerr << "err: tbr produced false distance" << std::endl;
+			exit(-2);
+		}
 	}
-
 	
 	void bisect(network::data *d, network::idx_t n0, network::idx_t n1, network::idx_t *s0, network::idx_t *s1)
 	{
@@ -228,11 +233,13 @@ namespace tbr
 				// could maybe join them together the original way for the last step
 				network::copy(td, d);
 				network::idx_t s0, s1;
+				
 				bisect(td, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
 				roulette(td, s0, s1, out);
 			}
 			else
 			{
+				continue;
 				network::idx_t taxon = tmp.pairs[i];
 				network::idx_t inner = tmp.pairs[i+1];
 				if (taxon >= d->mtx_taxons)

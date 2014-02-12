@@ -265,6 +265,14 @@ namespace network
 		
 		d->freelist[d->freecount++] = where;
 	}
+	
+	void print_characters(data *d)
+	{
+		for (int i=0;i<d->allocnodes;i++)
+		{
+			std::cout << i << " " << character::to_string(d->characters[i], d->mtx_characters) << std::endl;
+		}
+	}
 
 	void trace_edgelist(data *d, idx_t start, edgelist * out)
 	{

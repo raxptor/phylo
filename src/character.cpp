@@ -91,11 +91,21 @@ namespace character
 	distance_t distance(state_t *a, state_t *b, int characters)
 	{
 		int sum = 0;
-		for (int i=0;i<characters;i+=2)
+		for (int i=0;i<characters;i++)
 		{
+			if (a[i] == UNKNOWN_CHAR_VALUE || b[i] == UNKNOWN_CHAR_VALUE)
+				continue;
+			
+			int diff = a[i] - b[i];
+			if (diff < 0)
+				sum -= diff;
+			else
+				sum += diff;	
+			/*
 			const int _a = a[i] + (a[i+1] << 4);
 			const int _b = b[i] + (b[i+1] << 4);
 			sum += res8[_a^_b];
+			*/
 		}
 			
 		return sum;
@@ -106,12 +116,31 @@ namespace character
 	{
 		for (int i=0;i<characters;i++)
 		{
-			if (a[i] == b[i] || a[i] == c[i])
-				out[i] = a[i];
-			else if (b[i] == c[i])
-				out[i] = b[i];
-			else
+			if (a[i] == UNKNOWN_CHAR_VALUE && b[i] == UNKNOWN_CHAR_VALUE && c[i] == UNKNOWN_CHAR_VALUE)
+			{
+				out[i] = UNKNOWN_CHAR_VALUE;
+			}
+			else if (a[i] == UNKNOWN_CHAR_VALUE && b[i] == UNKNOWN_CHAR_VALUE)
 				out[i] = c[i];
+			else if (a[i] == UNKNOWN_CHAR_VALUE && c[i] == UNKNOWN_CHAR_VALUE)
+				out[i] = b[i];
+			else if (b[i] == UNKNOWN_CHAR_VALUE && c[i] == UNKNOWN_CHAR_VALUE)
+				out[i] = a[i];
+			else if (a[i] == UNKNOWN_CHAR_VALUE)
+				out[i] = (b[i] + c[i])/2;
+			else if (b[i] == UNKNOWN_CHAR_VALUE)
+				out[i] = (a[i] + c[i])/2;
+			else if (c[i] == UNKNOWN_CHAR_VALUE)
+				out[i] = (a[i] + b[i])/2;
+			else
+			{
+				if (a[i] == b[i] || a[i] == c[i])
+					out[i] = a[i];
+				else if (b[i] == c[i])
+					out[i] = b[i];
+				else
+					out[i] = c[i];
+			}
 		}
 	}
 	

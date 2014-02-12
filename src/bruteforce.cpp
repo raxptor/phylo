@@ -55,7 +55,7 @@ namespace bruteforce
 			edge tmp = _edges[i];
 			network::idx_t neu = network::insert(_network, _edges[i].n0, _edges[i].n1, which);
 			
-			if (_network->dist < _best_distance)
+			if (_network->dist <= _best_distance)
 			{
 				_edges[i].n0 = tmp.n0;
 				_edges[i].n1 = neu;
