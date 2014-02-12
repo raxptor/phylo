@@ -1,5 +1,6 @@
 #include "network.h"
 #include "character.h"
+#include "optimize.h"
 
 #include <cstdlib>
 #include <cstdio>
@@ -10,7 +11,7 @@
 
 // Debug stuffs
 //#define NETWORKDEBUG
-//#define NETWORKCHECKS
+//#define NETWORK_CHECKS
 
 #if defined(NETWORKDEBUG)
 	#define DPRINT(x) { std::cout << x << std::endl; }
@@ -27,6 +28,7 @@ namespace network
 		d->mtx_taxons = mtx->taxons;
 		d->mtx_characters = mtx->characters;
 		d->allocnodes = 2 * mtx->taxons - 2;
+		d->opt = optimize::create(mtx->characters, d->allocnodes);
 		d->network = new node[d->allocnodes];
 		d->characters = new character::state_t*[d->allocnodes];
 		d->cbuf = character::alloc(mtx->characters, d->allocnodes, d->characters);
@@ -49,28 +51,45 @@ namespace network
 	{
 		memcpy(target->network, source->network, sizeof(node) * source->allocnodes);
 		character::copy(target->cbuf, source->cbuf);
+		optimize::copy(target->opt, source->opt);
 		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
 		target->freecount = source->freecount;
 		target->dist = source->dist;
 	}
 	
-	void recompute_dist(data *target)
+	character::distance_t distance_by_edges(data *target)
 	{
 		edgelist e;
 		trace_edgelist(target, 0, &e);
-		target->dist = 0;
+		int tdist = 0;
+
 		for (int i=0;i<e.count;i+=2)
 		{
 			character::distance_t dist = character::distance(target->characters[e.pairs[i]], target->characters[e.pairs[i+1]], target->mtx_characters);
-			target->dist += dist;
+			tdist += dist;
 			DPRINT(" -> recompute dist, dist=" << dist << " for " << e.pairs[i] << "-" << e.pairs[i+1]);
 		}
+		return tdist;	
+	}
+	
+	void recompute_dist(data *target)
+	{
+		target->dist = optimize::optimize(target);
+		
+#if defined(NETWORK_CHECKS)
+		if (distance_by_edges(target) != target->dist)
+		{
+			std::cerr << "optimize::optimize() and tdist produced different results!" << std::endl;
+			exit(-1);
+		}
+#endif
 	}
 
 	void free(data *d)
 	{
 		delete [] d->characters;
 		delete [] d->network;
+		optimize::free(d->opt);
 		character::free(d->cbuf);
 		delete d;
 	}
@@ -97,14 +116,7 @@ namespace network
 
 	void check(network::data *d)
 	{
-#if defined(NETWORKCHECKS)
-		int r = d->dist;
-		recompute_dist(d);
-		if (r != d->dist)
-		{
-			std::cerr << "Network had wrong distance!" << std::endl;
-			exit(1);
-		}
+#if defined(NETWORK_CHECKS)
 #endif
 	}
 
@@ -185,20 +197,10 @@ namespace network
 			// must have all the remaining connection at c1, c2
 			net[which].c0 = n;
 		}
-		
-		// generate 
-		character::threesome(d->characters[n0], d->characters[n1], d->characters[which], d->characters[n], d->mtx_characters);
 
-		// maybe all of this could be merged into one calculation with the above
-		d->dist -= character::distance(d->characters[n0], d->characters[n1], chars);
-		d->dist += character::distance(d->characters[n0], d->characters[n], chars);
-		d->dist += character::distance(d->characters[n], d->characters[n1], chars);
-		d->dist += character::distance(d->characters[n], d->characters[which], chars);
-
-		
 		DPRINT("     => d = " << d->dist << " new=" << n);
 
-#if defined(NETWORKCHECKS)		
+#if defined(NETWORK_CHECKS)		
 		if (d->dist < old)
 			std::cout << "Inserting made it lower " << std::endl;
 
@@ -261,27 +263,20 @@ namespace network
 		node * network = d->network;
 
 		const idx_t n = network[which].c0;
-		
 		DPRINT("Disconnecting " << which << " with 'parent' " << n);
 				
-		//
 		idx_t r0, r1;
 		the_two_others(network, n, which, &r0, &r1);
 		
 		DPRINT(" -> merging from " << r0 << "-" << r1 << " with " << n << " in the middle");
-		edge_merge(d->network, r0, r1, n);		
-			
-		const int chars = d->mtx_characters;
-		d->dist -= character::distance(d->characters[which], d->characters[n], chars);
-		d->dist -= character::distance(d->characters[r0], d->characters[n], chars);
-		d->dist -= character::distance(d->characters[r1], d->characters[n], chars);
-		d->dist += character::distance(d->characters[r0], d->characters[r1], chars);
+		edge_merge(d->network, r0, r1, n);
+
 		DPRINT("   d => " << d->dist);	
 
 		// which must a terminal node
 		node_free(d, n);
 
-#if defined(NETWORKCHECKS)
+#if defined(NETWORK_CHECKS)
 		check(d);
 #endif
 	}

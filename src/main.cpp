@@ -74,6 +74,7 @@ int main(int argc, const char **argv)
 	}
 	
 	character::init();
+	optimize::init();
 	
 	matrix::data *mtx = matrix::load(argv[c]);
 	if (!mtx) 
@@ -88,8 +89,12 @@ int main(int argc, const char **argv)
 	if (method && !strcmp(method, "bruteforce"))
 		bruteforce::run(mtx, bound);
 		
-	network::data *tmp = dumb::make(mtx);
-	optimize::optimize(tmp);
+	if (method && !strcmp(method, "optimize"))
+	{
+		network::data *tmp = dumb::make(mtx);
+		optimize::optimize(tmp);
+		network::print_characters(tmp);
+	}
 
 	if (method && !strcmp(method, "ratchet"))
 	{
@@ -105,10 +110,7 @@ int main(int argc, const char **argv)
 		for (int i=0;i<10000;i++)
 		{
 			for (int j=0;j<num;j++)
-			{
 				ratchet::run(nw[j], &out);
-			}
-
 
 			// eliminate dupes						
 			for (int i=0;i<num;i++)

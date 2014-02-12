@@ -5,6 +5,7 @@
 #include "newick.h"
 #include "tbr.h"
 #include "debug.h"
+#include "optimize.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -21,7 +22,7 @@ namespace ratchet
 		for (int i=0;i<boosts;i++)
 			picks[i] = rand_u32() % d->mtx_characters;
 
-		const int old = d->dist;
+		const int old = optimize::optimize(d);
 		
 		network::data *new_net = network::alloc(d->matrix);
 		network::copy(new_net, d);
@@ -29,9 +30,7 @@ namespace ratchet
 		// manipulate & recalc
 		for (int i=0;i<d->allocnodes;i++)
 			character::toggle_boost(new_net->characters[i], picks, boosts);
-		
-		network::recompute_dist(new_net);	
-			
+
 		// set up temporary output structure for tbr, we won't record any of these
 		// networks as final		
 
@@ -50,37 +49,35 @@ namespace ratchet
 			character::toggle_boost(new_net->characters[i], picks, boosts);
 			
 		network::recompute_dist(new_net);	
-		
-		if (new_net->dist < out->best_network->dist)
+
+		// see if we did any better than previous best
+		const character::distance_t prestore = optimize::optimize(out->best_network);
+
+		if (new_net->dist < prestore)
 		{
 			std::cout << "ratchet: found net (ph1) with dist " << new_net->dist << " :";
 			network::copy(out->best_network, new_net);
 			newick::print(new_net);
 		}
 		
-		const character::distance_t prestore = out->best_network->dist;
-		
 		// run again (no temp out this time)
 		for (int i=0;i<200;i++)
 			if (!tbr::run(new_net, out))
 				break;
 
+		network::recompute_dist(new_net);	
+
 		if (new_net->dist < prestore)
 		{
 			int d = new_net->dist;
-			network::recompute_dist(new_net);
-			std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") =>  ";
+			new_net->dist = network::distance_by_edges(new_net);;
+			std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") previous(" << prestore << ")" << std::endl;
 			newick::print(new_net);
-			debug::mk_backtrack(new_net);
-			// network::print_characters(new_net);
-		}
-
-		// keep worknig
-		if (new_net->dist <= prestore)
-		{
+			//network::print_characters(new_net);
+			// debug::mk_backtrack(new_net);
 			network::copy(out->best_network, new_net);
 		}
-		
+
 		network::copy(d, new_net);
 		network::free(new_net);
 	}
