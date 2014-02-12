@@ -85,7 +85,7 @@ int main(int argc, const char **argv)
 		matrix::print(mtx);
 	
 	if (method && !strcmp(method, "bruteforce"))
-		bruteforce::run(mtx);
+		bruteforce::run(mtx, bound);
 
 	if (method && !strcmp(method, "ratchet"))
 	{
