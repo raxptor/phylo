@@ -12,27 +12,70 @@
 
 #include <mtw/mersenne-twister.h>
 
+void help()
+{
+	std::cout << "Run: phylo [args] matrix-file" << std::endl; 
+	std::cout << "--seed <seed>  - Specify random seed" << std::endl;
+	std::cout << "--run <method> - Run analysis with method [bruteforce, ratchet]" << std::endl;
+	std::cout << "--print <what> - Print [matrix]" << std::endl;
+	std::cout << std::endl;
+	exit(0);
+}
+
 int main(int argc, const char **argv)
 {
+	const char *method = 0;
+	const char *print = 0;
 	
-	if (argc < 2)
+	// arguments with arguments
+	int c;
+	for (c=1;c<argc-1;c++)
 	{
-		std::cerr << "Error: no matrix specified." << std::endl;
+		if (!strcmp(argv[c], "--run"))
+		{
+			method = argv[c+1];
+			c++;
+		}
+		else if (!strcmp(argv[c], "--seed"))
+		{
+			seed(atoi(argv[2]));
+			c++;
+		}
+		else if (!strcmp(argv[c], "--print"))
+		{
+			print = argv[c+1];
+			c++;
+		}
+	}
+	
+	if (!strcmp(argv[c], "--help"))
+	{
+		help();
+	}
+	
+	if (c >= argc)
+	{
+		std::cerr << "Error: no matrix specified. Please provide a path to the matrix" << std::endl;
+		std::cerr << "Use --help for help" << std::endl;
 		return -1;
 	}
 	
-	if (argc > 2)
-		seed(atoi(argv[2]));
-	
 	character::init();
 	
-	matrix::data *mtx = matrix::load(argv[1]);
+	matrix::data *mtx = matrix::load(argv[c]);
 	if (!mtx) 
 	{
 		std::cerr << "Matrix failed to load. Aborting." << std::endl;
 		return -1;
 	}
 	
+	if (print && !strcmp(print, "matrix"))
+		matrix::print(mtx);
+	
+	if (method && !strcmp(method, "bruteforce"))
+		bruteforce::run(mtx);
+	
+/*
 	matrix::print(mtx);
 
 	const int num = 10;
@@ -58,11 +101,10 @@ int main(int argc, const char **argv)
 	std::cout << std::endl;
 	std::cout << "Done. Best network (" << out.best_network->dist << ") ==> ";
 	newick::print(out.best_network);
-/*
+
 	std::cout << "Bruteforcing the solution..." << std::endl;
 	bruteforce::run(mtx);
 */
-	matrix::free(mtx);
-	
+	matrix::free(mtx);	
 	return 0;
 }
