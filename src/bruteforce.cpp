@@ -3,6 +3,7 @@
 #include "network.h"
 #include "newick.h"
 #include "character.h"
+#include "optimize.h"
 #include "dumb.h"
 
 #include <iostream>
@@ -55,6 +56,8 @@ namespace bruteforce
 		{
 			edge tmp = _edges[i];
 			network::idx_t neu = network::insert(_network, _edges[i].n0, _edges[i].n1, which);
+			
+			optimize::optimize(_network);
 			
 			if (_network->dist <= _best_distance)
 			{
@@ -126,7 +129,7 @@ namespace bruteforce
 		
 		std::cout << "Enumerated " << _visited << " networks." << std::endl;
 		
-		if (_best_distance < bound)
+		if (_best_distance < bound || bound == -1)
 		{
 			std::cout << _best_network.size() << " networks share minimal distance " << _best_distance << std::endl;
 			for (unsigned int i=0;i<_best_network.size() && i < 10;i++)

@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "optimize.h"
 #include "matrix.h"
 #include "dumb.h"
 #include "tree.h"
@@ -86,6 +87,9 @@ int main(int argc, const char **argv)
 	
 	if (method && !strcmp(method, "bruteforce"))
 		bruteforce::run(mtx, bound);
+		
+	network::data *tmp = dumb::make(mtx);
+	optimize::optimize(tmp);
 
 	if (method && !strcmp(method, "ratchet"))
 	{

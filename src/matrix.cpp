@@ -74,7 +74,7 @@ namespace matrix
 			// filter out characters
 			for (int i=w1+1;i<line.size();i++)
 			{
-				if (line[i] == '0' || line[i] == '1' || line[i] == '?')
+				if ((line[i] >= '0' && line[i] <= '9') || line[i] == '?')
 					tmp.push_back(line[i]);
 			}
 			

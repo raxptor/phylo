@@ -57,7 +57,10 @@ namespace network
 	void edge_split(node *net, idx_t n0, idx_t n1, idx_t newmiddle);
 	void edge_merge(node *net, idx_t n0, idx_t n1, idx_t middle);
 	void the_two_others(node *network, idx_t where, idx_t which, idx_t *r0, idx_t *r1);
-	void trace_edgelist(data *d, idx_t start, edgelist * out);	
+	void trace_edgelist(data *d, idx_t start, edgelist * out);
+	
+	// make all p0 point to the root 
+	void treeify(network::data *data, idx_t root);
 	
 	void print_characters(data *d);
 

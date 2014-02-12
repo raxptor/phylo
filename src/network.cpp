@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
+#include <algorithm>
 
 // Debug stuffs
 //#define NETWORKDEBUG
@@ -350,6 +351,43 @@ namespace network
 		
 		out->count = (outptr - out->pairs);
 	}
+	
+	void treeify(network::data *data, idx_t root)
+	{
+		node *net = data->network;
+		int queue = 0;
+		
+		idx_t toexplore[MAX_NODES];
+		idx_t source[MAX_NODES];
+
+		toexplore[0] = root;
+		source[0] = NOT_IN_NETWORK;
+		
+		while (queue >= 0)
+		{
+			const idx_t cur = toexplore[queue];
+			const idx_t src = source[queue];
+			--queue;
+				
+			// always make c0 point upwards
+			if (net[cur].c1 == src)
+				std::swap(net[cur].c0, net[cur].c1);
+			else if (net[cur].c2 == src)
+				std::swap(net[cur].c0, net[cur].c2);
+				
+			const idx_t c[3] = { net[cur].c0, net[cur].c1, net[cur].c2 };
+			for (int i=0;i<3;i++)
+			{
+				if (c[i] != src && c[i] != NOT_IN_NETWORK)
+				{
+					++queue;
+					toexplore[queue] = c[i];
+					source[queue] = cur;
+				}
+			}
+		}
+	}
+	
 
 	
 }

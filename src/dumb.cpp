@@ -12,9 +12,9 @@ namespace dumb
 {
 	network::data *make(matrix::data *mtx)
 	{
-		if (mtx->characters < 2)
+		if (mtx->taxons < 2)
 		{
-			std::cerr << "Trying to make a network with less than 2 characters!" << std::endl;
+			std::cerr << "Trying to make a network with less than 2 taxons!" << std::endl;
 			return 0;
 		}
 		
