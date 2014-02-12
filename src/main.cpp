@@ -30,6 +30,9 @@ int main(int argc, const char **argv)
 	
 	mtw_seed(0);
 	
+	if (argc == 1)
+		help();
+	
 	// arguments with arguments
 	int c;
 	for (c=1;c<argc-1;c++)
