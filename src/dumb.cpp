@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <iostream>
 
+#include <mtw/mersenne-twister.h>
+
 namespace dumb
 {
 	network::data *make(matrix::data *mtx)
@@ -40,7 +42,7 @@ namespace dumb
 		
 		for (int i=2;i<t->matrix->taxons;i++)
 		{
-			const int pick = rand() % edges.size();
+			const int pick = rand_u32() % edges.size();
 			
 			edge tmp = edges[pick];
 			

@@ -10,8 +10,11 @@
 #include "ratchet.h"
 #include "network.h"
 
+#include <mtw/mersenne-twister.h>
+
 int main(int argc, const char **argv)
 {
+	
 	if (argc < 2)
 	{
 		std::cerr << "Error: no matrix specified." << std::endl;
@@ -19,7 +22,7 @@ int main(int argc, const char **argv)
 	}
 	
 	if (argc > 2)
-		srand(atoi(argv[2]));
+		seed(atoi(argv[2]));
 	
 	character::init();
 	

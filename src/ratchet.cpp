@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <mtw/mersenne-twister.h>
 
 #define DPRINT(x) { std::cout << x << std::endl; }
 
@@ -18,7 +19,7 @@ namespace ratchet
 		
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
-			picks[i] = rand() % d->mtx_characters;
+			picks[i] = rand_u32() % d->mtx_characters;
 
 		const int old = d->dist;
 		
