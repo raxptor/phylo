@@ -239,7 +239,6 @@ namespace tbr
 			}
 			else
 			{
-				continue;
 				network::idx_t taxon = tmp.pairs[i];
 				network::idx_t inner = tmp.pairs[i+1];
 				if (taxon >= d->mtx_taxons)
