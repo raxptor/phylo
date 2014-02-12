@@ -83,7 +83,7 @@ namespace bruteforce
 		}		
 	}
 
-	network::data* run(matrix::data *matrix)
+	network::data* run(matrix::data *matrix, int bound)
 	{		
 		_network = network::alloc(matrix);
 		_visited = 0;
@@ -104,6 +104,9 @@ namespace bruteforce
 				_best_distance = _network->dist;
 			}
 		}
+		
+		if (bound != -1)
+			_best_distance = bound;
 		
 		std::cout << "Starting brute force search (branch & bound) with start dist = " << _best_distance << std::endl;
 		network::init(_network, 0, 1);

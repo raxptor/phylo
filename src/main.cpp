@@ -34,6 +34,7 @@ int main(int argc, const char **argv)
 		help();
 	
 	// arguments with arguments
+	int bound = -1;
 	int c;
 	for (c=1;c<argc-1;c++)
 	{
@@ -42,9 +43,14 @@ int main(int argc, const char **argv)
 			method = argv[c+1];
 			c++;
 		}
+		else if (!strcmp(argv[c], "--bound"))
+		{
+			bound = atoi(argv[c+1]);
+			c++;
+		}
 		else if (!strcmp(argv[c], "--seed"))
 		{
-			mtw_seed(atoi(argv[2]));
+			mtw_seed(atoi(argv[c+1]));
 			c++;
 		}
 		else if (!strcmp(argv[c], "--print"))

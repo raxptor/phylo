@@ -7,7 +7,7 @@ namespace matrix { struct data; }
 namespace bruteforce
 {
 	// brute forces the maximally parsimonious tree
-	tree::data* run(matrix::data *matrix);
+	tree::data* run(matrix::data *matrix, int bound=-1);
 }
 
 #endif
