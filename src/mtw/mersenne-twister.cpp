@@ -22,7 +22,10 @@
 
 #include <stdio.h>
 #include <stdint.h>
+
 #include "mersenne-twister.h"
+
+#define UINT32_MAX  (0xffffffff)
 
 /*
  * We have an array of 624 32-bit values, and there are
@@ -168,7 +171,7 @@ extern "C" int rand()
    * PORTABILITY WARNING:
    *
    * rand_u32() uses all 32-bits for the pseudo-random number,
-   * but rand() must return a number from 0 ... RAND_MAX.
+   * but rand() must return a number from 0 ... MT_RAND_MAX.
    *
    * We'll just assume that rand() only uses 31 bits worth of
    * data, and that we're on a two's complement system.  

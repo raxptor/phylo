@@ -1,6 +1,7 @@
 #include "character.h"
 #include <string>
 #include <iostream>
+#include <cstring>
 
 namespace character
 {

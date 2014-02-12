@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iostream>
 #include <vector>
+#include <cstring>
 
 // Debug stuffs
 // #define NETWORKDEBUG
