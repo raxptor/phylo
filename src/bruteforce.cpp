@@ -31,7 +31,6 @@ namespace bruteforce
 		{
 			if (_network->dist > _best_distance)
 			{
-			
 			}
 			else
 			{
@@ -40,6 +39,8 @@ namespace bruteforce
 					std::cout << " -> Best new distance " << _network->dist << std::endl;
 					_best_network.clear();
 					_best_distance = _network->dist;
+					newick::print(_network);
+					// network::print_characters(_network);
 				}
 				_best_network.push_back(newick::from_network(_network, 0));
 			}
@@ -79,6 +80,7 @@ namespace bruteforce
 				// restore			
 				_edges[i] = tmp;
 			}
+			
 			network::disconnect(_network, which);
 		}		
 	}
@@ -124,10 +126,17 @@ namespace bruteforce
 		
 		std::cout << "Enumerated " << _visited << " networks." << std::endl;
 		
-		std::cout << _best_network.size() << " networks share minimal distance " << _best_distance << std::endl;
-		for (unsigned int i=0;i<_best_network.size() && i < 10;i++)
+		if (_best_distance < bound)
 		{
-			std::cout << "Network " << i << ": " << _best_network[i] << std::endl;
+			std::cout << _best_network.size() << " networks share minimal distance " << _best_distance << std::endl;
+			for (unsigned int i=0;i<_best_network.size() && i < 10;i++)
+			{
+				std::cout << "Network " << i << ": " << _best_network[i] << std::endl;
+			}
+		}
+		else
+		{
+			std::cout << "Found no networks with d < " << bound << std::endl;
 		}
 		
 		return 0;

@@ -61,6 +61,8 @@ namespace network
 	
 	void print_characters(data *d);
 
+	void character_fiddle(data *);
+	
 	void free(data *d);
 }
 

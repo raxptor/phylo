@@ -8,8 +8,8 @@
 #include <cstring>
 
 // Debug stuffs
-// #define NETWORKDEBUG
-// #define NETWORKCHECKS
+//#define NETWORKDEBUG
+//#define NETWORKCHECKS
 
 #if defined(NETWORKDEBUG)
 	#define DPRINT(x) { std::cout << x << std::endl; }
@@ -96,7 +96,14 @@ namespace network
 
 	void check(network::data *d)
 	{
-#if defined(NETWORKDEBUG)
+#if defined(NETWORKCHECKS)
+		int r = d->dist;
+		recompute_dist(d);
+		if (r != d->dist)
+		{
+			std::cerr << "Network had wrong distance!" << std::endl;
+			exit(1);
+		}
 #endif
 	}
 
@@ -148,6 +155,10 @@ namespace network
 	idx_t insert(data *d, idx_t n0, idx_t n1, idx_t which)
 	{
 		DPRINT(" Insert " << which << " at " << n0 << "-" << n1);
+
+#if defined(NETWORK_CHECKS)		
+		int old = d->dist;
+#endif
 		
 		node * const net = d->network;
 		
@@ -183,9 +194,13 @@ namespace network
 		d->dist += character::distance(d->characters[n], d->characters[n1], chars);
 		d->dist += character::distance(d->characters[n], d->characters[which], chars);
 
+		
 		DPRINT("     => d = " << d->dist << " new=" << n);
 
 #if defined(NETWORKCHECKS)		
+		if (d->dist < old)
+			std::cout << "Inserting made it lower " << std::endl;
+
 		check(d);
 #endif
 
@@ -215,6 +230,35 @@ namespace network
 		}
 	}
 	
+	void character_fiddle(data *d)
+	{
+		int md = d->dist;
+		recompute_dist(d);
+		if (md != d->dist)
+			std::cout << " dist mismatch " << d->dist << " -> " << md << std::endl;
+			
+		int fd = 0;
+		for (int i=d->mtx_taxons;i<d->allocnodes;i++)
+		{
+			for (int j=0;j<d->mtx_characters;j++)
+			{
+				d->characters[i][j] ^= 1;
+				recompute_dist(d);
+				if (d->dist < md)
+				{
+					md = d->dist;
+					fd++;
+					std::cout << "i changed " << i << "x" << j << " it is now " << (int)d->characters[i][j] << std::endl;
+				}
+				else 
+				{
+					d->characters[i][j] ^= 1;
+				}
+			}
+		}
+		recompute_dist(d);
+	}
+	
 	void disconnect(data *d, idx_t which)
 	{
 		node * network = d->network;
@@ -230,15 +274,15 @@ namespace network
 		DPRINT(" -> merging from " << r0 << "-" << r1 << " with " << n << " in the middle");
 		edge_merge(d->network, r0, r1, n);		
 			
-		// which must a terminal node
-		node_free(d, n);
-		
 		const int chars = d->mtx_characters;
 		d->dist -= character::distance(d->characters[which], d->characters[n], chars);
 		d->dist -= character::distance(d->characters[r0], d->characters[n], chars);
 		d->dist -= character::distance(d->characters[r1], d->characters[n], chars);
 		d->dist += character::distance(d->characters[r0], d->characters[r1], chars);
 		DPRINT("   d => " << d->dist);	
+
+		// which must a terminal node
+		node_free(d, n);
 
 #if defined(NETWORKCHECKS)
 		check(d);

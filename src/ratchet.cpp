@@ -69,8 +69,11 @@ namespace ratchet
 
 		if (new_net->dist < prestore)
 		{
-			std::cout << "ratchet: found net (ph2) with dist " << new_net->dist << " :";
+			int d = new_net->dist;
+			network::recompute_dist(new_net);
+			std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") =>  ";
 			newick::print(new_net);
+			// network::print_characters(new_net);
 		}
 
 		// keep worknig
