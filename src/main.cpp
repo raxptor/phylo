@@ -103,7 +103,6 @@ int main(int argc, const char **argv)
 		{
 			for (int j=0;j<num;j++)
 			{
-				network::character_fiddle(nw[j]);
 				ratchet::run(nw[j], &out);
 			}
 				

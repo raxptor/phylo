@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
 
 #include "network.h"
 #include "tree.h"
@@ -57,6 +58,8 @@ namespace newick
 
 		for (int i=0;i<3;i++)
 		{
+			std::sort(c, c + 3);
+			
 			if (c[i] != from && c[i] != network::NOT_IN_NETWORK)
 			{
 				if (!first)

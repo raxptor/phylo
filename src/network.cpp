@@ -230,12 +230,12 @@ namespace network
 		}
 	}
 	
-	void character_fiddle(data *d)
+	bool character_fiddle(data *d, int target, int changes)
 	{
-		int md = d->dist;
-		recompute_dist(d);
-		if (md != d->dist)
-			std::cout << " dist mismatch " << d->dist << " -> " << md << std::endl;
+		if (d->dist == target)
+			return true;
+		if (changes == 0)
+			return false;
 			
 		int fd = 0;
 		for (int i=d->mtx_taxons;i<d->allocnodes;i++)
@@ -244,19 +244,15 @@ namespace network
 			{
 				d->characters[i][j] ^= 1;
 				recompute_dist(d);
-				if (d->dist < md)
-				{
-					md = d->dist;
-					fd++;
-					std::cout << "i changed " << i << "x" << j << " it is now " << (int)d->characters[i][j] << std::endl;
-				}
-				else 
-				{
-					d->characters[i][j] ^= 1;
-				}
+				
+				if (character_fiddle(d, target, changes-1))
+					return true;
+				
+				d->characters[i][j] ^= 1;
 			}
 		}
 		recompute_dist(d);
+		return false;
 	}
 	
 	void disconnect(data *d, idx_t which)

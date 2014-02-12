@@ -4,6 +4,7 @@
 #include "network.h"
 #include "newick.h"
 #include "tbr.h"
+#include "debug.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -73,6 +74,7 @@ namespace ratchet
 			network::recompute_dist(new_net);
 			std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") =>  ";
 			newick::print(new_net);
+			debug::mk_backtrack(new_net);
 			// network::print_characters(new_net);
 		}
 
