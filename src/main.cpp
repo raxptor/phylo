@@ -27,6 +27,8 @@ int main(int argc, const char **argv)
 	const char *method = 0;
 	const char *print = 0;
 	
+	seed(0);
+	
 	// arguments with arguments
 	int c;
 	for (c=1;c<argc-1;c++)
@@ -92,9 +94,13 @@ int main(int argc, const char **argv)
 			for (int j=0;j<num;j++)
 				ratchet::run(nw[j], &out);
 				
-			rot = (rot + 1) % num;
+			rot = (++rot) % num;
+			
 			if (nw[rot]->dist >= out.best_network->dist)
-				dumb::make_inplace(nw[rot]);
+			{
+				if (newick::from_network(nw[rot], 0) != newick::from_network(out.best_network, 0))
+					dumb::make_inplace(nw[rot]);
+			}
 		}
 
 		std::cout << std::endl;
