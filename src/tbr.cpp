@@ -167,7 +167,7 @@ namespace tbr
 				
 				// actually construct it
 				DPRINT("New distance " << new_dist << " vs " << out->best_network->dist);
-				if (new_dist < out->best_network->dist)
+				if (new_dist < out->best_network->dist || (new_dist == out->best_network->dist && rand()%32 == 0))
 				{
 					const network::node b0 = d->network[_b0];
 					const network::node b1 = d->network[_b1];
