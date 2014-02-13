@@ -347,7 +347,7 @@ namespace network
 		out->count = (outptr - out->pairs);
 	}
 	
-	void treeify(network::data *data, idx_t root, node *out)
+	void treeify(network::data *data, idx_t root, node *out, idx_t *bottomup)
 	{
 		node *net = data->network;
 		
@@ -362,11 +362,18 @@ namespace network
 		toexplore[0] = root;
 		source[0] = NOT_IN_NETWORK;
 		
+		int tmpOrder[1024];
+		int tmpOrderOut = 0;
+		
 		while (queue >= 0)
 		{
 			const idx_t cur = toexplore[queue];
 			const idx_t src = source[queue];
 			--queue;
+			
+			// only HTU
+			if (cur >= data->mtx_taxons)
+				tmpOrder[tmpOrderOut++] = cur;
 				
 			// always make c0 point upwards
 			out[cur] = net[cur];
@@ -387,6 +394,11 @@ namespace network
 				}
 			}
 		}
+		
+		for (int i=0;i<tmpOrderOut;i++)
+			bottomup[i] = tmpOrder[tmpOrderOut-1-i];
+		if (tmpOrderOut != data->allocnodes)
+			bottomup[tmpOrderOut] = -1;
 	}
 	
 

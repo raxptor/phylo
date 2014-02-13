@@ -1,10 +1,11 @@
 #include "network.h"
 #include "character.h"
+#include "newick.h"
+
 #include <iostream>
 
-
-//#define DPRINT(x) { std::cout << x << std::endl; }
-#define DPRINT(x) {};
+#define DPRINT(x) { std::cout << x << std::endl; }
+//#define DPRINT(x) {};
 
 namespace optimize
 {
@@ -26,6 +27,11 @@ namespace optimize
 		network::node *net;
 		int sum;
 		int taxons;
+		int netsize;
+		int bottomup[1024];
+		
+		int pstate[1024];		
+		
 		int cval[1024];
 	};
 
@@ -125,7 +131,7 @@ namespace optimize
 	
 	void push_down(optstate *s, int w_, char value_)
 	{
-		DPRINT("traverse [" << w << "] val=" << (int)value);
+//		DPRINT("traverse [" << w << "] val=" << (int)value);
 		
 		struct que {
 			int w;
@@ -235,10 +241,56 @@ namespace optimize
 		optstate & s = *(data->opt);
 		
 		// unnecessary but why not
+		
 		s.root = 0;
 		s.taxons = data->mtx_taxons;
 
-		network::treeify(data, 0, s.net);
+		network::treeify(data, 0, s.net, s.bottomup);
+		
+		newick::print(data);
+		
+		s.netsize = data->allocnodes;
+		for (int i=0;i<data->allocnodes;i++)
+		{
+			DPRINT("Visit order [" << i << "] = " << s.bottomup[i]);
+			if (s.bottomup[i] < 0) 
+			{
+				s.netsize = i;
+				break;
+			}
+		}
+		
+		int sum = 0;
+		
+		for (int c=0;c<data->mtx_characters;c++)
+		{
+			for (int i=0;i<s.taxons;i++)
+				s.pstate[i] = mask(data->characters[i][c]);
+			
+			for (int i=0;i<s.netsize;i++)
+			{
+				const int n = s.bottomup[i];
+				const int c1 = s.net[n].c1;
+				const int c2 = s.net[n].c2;
+
+				const int a = s.pstate[c1];
+				const int b = s.pstate[c2];
+				
+				int v = a & b;
+				if (!v)
+				{
+					DPRINT("Visiting " << i << " union " << (int)a << " | " << (int)b);
+					v = a | b;
+					sum += mindist[v];
+				}
+				
+				s.pstat[i] = v;
+			}
+		}
+		
+/*
+		DPRINT("Optimize netsize = " << s.netsize);
+		
 		
 		int count = 0;
 		for (int i=0;i<data->mtx_characters;i++)
@@ -254,12 +306,12 @@ namespace optimize
 		}
 		
 		DPRINT("Recomputed " << count << " characters");
+
 		
 		character::distance_t sum = 0;
 		for (int i=0;i<data->mtx_characters;i++)
 			sum += data->opt->chars[i].sum;
-
-/*			
+*/
 		int sum2 = network::distance_by_edges(data);	
 		if (sum != sum2)
 		{
@@ -267,7 +319,6 @@ namespace optimize
 			std::cerr << "Fucked up the count again " << sum2 << " but i say " << sum << std::endl;
 			exit(1);
 		}
-*/
 		DPRINT("  [opt] - prevdist=" << data->dist << " newdist=" << sum);
 		return sum;
 	}

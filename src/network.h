@@ -67,7 +67,7 @@ namespace network
 	void trace_edgelist(data *d, idx_t start, edgelist * out);
 	
 	// make all p0 point to the root 
-	void treeify(network::data *data, idx_t root, node *outlist);
+	void treeify(network::data *data, idx_t root, node *outlist, idx_t *bottomup);
 	
 	void print_characters(data *d);
 
