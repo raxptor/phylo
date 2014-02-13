@@ -10,24 +10,31 @@
 
 namespace optimize
 {
+	enum {
+		BUFSIZE  = 4096 // char group * taxa limit
+	};
+	
+	typedef unsigned char st_t;
+	
+	// optimization state for a tree or subtree
+	
+	struct cgroup_data
+	{
+		int count;
+		st_t pstate[BUFSIZE]; 
+		st_t fstate[BUFSIZE];
+	};
+	
 	struct optstate
 	{
-		int characters;
+		int root, maxnodes;
+		int *first_pass_order;
 		
-		// work memory
-		int root;
-		int character;
+		cgroup_data unordered;
+		cgroup_data ordered;
+		
 		network::node *net;
-		int sum;
-		int totsum;
-		int taxons;
-		int netsize;
-		int bottomup[1024];
-		int pstate[1024];		
-		int cval[1024];
-		
-		unsigned char *char_masks;
-		
+		matrix::data *matrix;
 	};
 
 	inline char mask(int val)
@@ -37,38 +44,10 @@ namespace optimize
 			
 		return 1 << val;
 	}
-	
-	void copy(optstate *target, optstate *source)
-	{
-	
-	}
-	
-	optstate* create(network::data *d)
-	{
-		optstate *st = new optstate();
-		st->taxons = d->mtx_taxons;
-		st->char_masks = new unsigned char[d->mtx_taxons * d->mtx_characters];
-		st->net = new network::node[d->allocnodes];
-		st->characters = d->mtx_characters;
-		
-		for (int i=0;i<d->mtx_characters;i++)
-		{
-			for (int j=0;j<d->mtx_taxons;j++)
-			{
-				st->char_masks[i * d->mtx_taxons + j] = mask(d->matrix->taxonbase[j][i]);
-			}
-		}
-		
-		return st;
-	}
-	
-	void free(optstate *s)
-	{
-		delete [] s->net;
-		delete [] s->char_masks;
-		delete s;
-	}
-	
+
+	// ----------------------- 
+	// 
+	//	
 	int is_single[256];
 	int mindist[256];
 
@@ -76,9 +55,8 @@ namespace optimize
 	{
 		for (int i=0;i<256;i++)
 			is_single[i] = -1;
-			
-		for (int i=0;i<32;i++)
-			is_single[0 << i] = i;
+		for (int i=0;i<8;i++)
+			is_single[1 << i] = i;
 			
 		for (int i=0;i<256;i++)
 		{
@@ -98,15 +76,208 @@ namespace optimize
 			}
 		}
 	}
-
-	// these are all valid values
-	inline character::distance_t dist(character::state_t a, character::state_t b)
+	
+	// Converts the values in the matrix into bit forms like this
+	//
+	// 1 = 0000001
+	// 2 = 0000010
+	// 3 = 0000100
+	// 
+	void optimize_cgroups(matrix::cgroup *source, cgroup_data *out, int maxnodes, int taxons)
 	{
-		if (a > b) 
-			return a - b; 
-		return b - a;
+		out->count = source->count;
+		
+		if (out->count * taxons > BUFSIZE)
+		{
+			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->count * taxons << std::endl;
+			exit(-1);
+		}
+
+		for (unsigned int i=0;i<source->count;i++)
+		{
+			for (unsigned t=0;t<taxons;t++)		
+			{
+				unsigned int mtxofs = i * taxons + t;
+				unsigned int dataofs = i * maxnodes + t;
+				
+				out->pstate[dataofs] = out->fstate[dataofs] = mask(source->submatrix[mtxofs]);
+			}
+		}
 	}
 	
+	optstate* create(network::data *d)
+	{
+		optstate *st = new optstate();
+		st->matrix = d->matrix;
+		st->maxnodes = d->allocnodes;
+		st->first_pass_order = new int[3 * d->allocnodes]; // this will be more than needed.
+		st->net = new network::node[d->allocnodes];
+		st->root = -1;
+		
+		optimize_cgroups(&d->matrix->unordered, &st->unordered, st->maxnodes, d->mtx_taxons);
+		optimize_cgroups(&d->matrix->ordered, &st->ordered, st->maxnodes, d->mtx_taxons);
+		return st;
+	}
+	
+	struct unordered_scoring 
+	{
+		static inline void mod_score(int unionmask, int *out)
+		{
+			++(*out);
+		}
+	};
+	
+	struct ordered_scoring
+	{
+		static inline void mod_score(int unionmask, int *out)
+		{
+			(*out) += mindist[unionmask];
+		}
+	};
+	
+	char to_char(st_t x)
+	{
+		if (x == 0xff)
+			return '?';
+		else 
+		{
+			int v = is_single[x];
+			if (v != -1)
+				return '0' + v;
+			else
+				return 'X';
+		}
+	}
+	
+	void print_cgroup(cgroup_data *cd, int maxnodes, int taxons)
+	{
+		for (int t=0;t<taxons;t++)
+		{
+			std::cout.width(3);
+			std::cout << t << " f => ";
+			for (unsigned int i=0;i<cd->count;i++)
+			{
+				std::cout << to_char(cd->fstate[i * maxnodes + t]);
+			}
+			std::cout << " p => ";
+			for (unsigned int i=0;i<cd->count;i++)
+			{
+				std::cout << to_char(cd->pstate[i * maxnodes + t]);
+			}
+			std::cout << std::endl;
+		}
+	}
+	
+	template<typename SCORING_FN>
+	int slow_single_first_pass(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
+	{
+		int sum = 0;
+		
+		// for all characters in this group
+		for (int i=0;i<cd->count;i++)
+		{
+			const int *bp = fpo;
+
+			// offset to the right row into the submatrix table
+			st_t *prow = &cd->pstate[maxnodes * i];
+
+			while (bp[0] != -1)
+			{
+				const int n  = bp[0];
+				const int c1 = bp[1];
+				const int c2 = bp[2];
+				
+				const int a = prow[c1];
+				const int b = prow[c2];
+				
+				DPRINT(n << " => " << c1 << ", " << c2 << "  a=" << a << " b=" << b);
+
+				bp += 3;
+				
+				int v = a & b;
+				if (!v)
+				{
+					v = a | b;
+					SCORING_FN::mod_score(v, &sum);
+				}
+				
+				DPRINT("writing pstate[" << n << "] [char:" << i << "] = " << v << " sum=" << sum);
+				prow[n] = v;
+			}
+			
+			int rv = prow[rootHTU] & prow[root];
+			if (!rv)
+			{
+				rv = prow[rootHTU] | prow[root];
+				SCORING_FN::mod_score(prow[rootHTU] | prow[root], &sum);
+				DPRINT("Diff at root, scor=" << sum);
+			}
+			
+			DPRINT("offsetroot = " << (cd->count * i + root));
+			DPRINT("root@" << root << " => " << rv);
+			prow[root] = rv;
+		}
+		
+		return sum;	
+	}
+
+	void print_state(optstate *st, int maxnodes, int taxons)
+	{
+		std::cout << std::endl;
+
+		if (st->ordered.count > 0)
+		{
+			std::cout << "=== Ordered characters (" << st->unordered.count << ")" << " ===" << std::endl;
+			std::cout << std::endl;
+			print_cgroup(&st->ordered, maxnodes, taxons);
+			std::cout << std::endl;
+		}
+		
+		if (st->unordered.count > 0)
+		{
+			std::cout << "=== Unordered characters (" << st->unordered.count << ")" << " ===" << std::endl;
+			std::cout << std::endl;
+			print_cgroup(&st->unordered, maxnodes, taxons);
+		}
+	}
+	
+	int optimize_for_tree(optstate *st, network::data *d, int root)
+	{
+		
+		st->root = root;
+		network::treeify(d, root, st->net, st->first_pass_order);
+		
+		int rootHTU = st->net[root].c1;
+		if (rootHTU < 0)
+			rootHTU = st->net[root].c2;
+			
+		DPRINT("Root=" << root << " rootHTU=" << rootHTU);
+
+		int sum0, sum1;
+		sum0 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
+		sum1 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
+		int sum = sum0 + sum1;
+
+//		print_state(st, st->maxnodes, d->mtx_taxons);
+
+		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
+		// -- lala lala --
+		return sum;
+	}
+	
+	
+	void copy(optstate *target, optstate *source)
+	{
+	
+	}
+
+	void free(optstate *s)
+	{
+		delete [] s->net;
+		delete s;
+	}
+
+
 	/*
 	void push_down(optstate *s, int w_, char value_)
 	{
@@ -199,88 +370,9 @@ namespace optimize
 	
 	character::distance_t optimize(network::data *data, bool all_chars)
 	{
-		DPRINT("Treeifying network...");
-		optstate & s = *(data->opt);
+		DPRINT("[optimize] - Full optimization run.");
+		return optimize_for_tree(data->opt, data, 0);
 		
-		// unnecessary but why not
 		
-		s.root = 0;
-		s.taxons = data->mtx_taxons;
-		s.totsum = 0;
-
-		network::treeify(data, 0, s.net, s.bottomup);
-//		newick::print(data);
-		
-		s.netsize = 1;
-		for (int i=0;i<2048;i++)
-		{
-			if (s.bottomup[i] < 0) 
-			{
-				s.netsize = i;
-				break;
-			}
-		}
-		
-		if (s.netsize % 3)
-		{
-			std::cerr << "Visit order is not %3=0, it is " << s.netsize << "!" << std::endl;
-			exit(-2);
-		}
-		
-		DPRINT("Netsize = " << s.netsize);		
-		
-		int sum = 0;
-		
-		for (int c=0;c<data->mtx_characters;c++)
-		{
-			unsigned char *char_masks = s.char_masks + c * data->mtx_taxons;
-			for (int i=0;i<data->mtx_taxons;i++)
-				s.pstate[i] = char_masks[i];
-			
-			const int *bp = s.bottomup;
-			while (true)
-			{
-				const int n = bp[0];
-				const int c1 = bp[1];
-				const int c2 = bp[2];
-				
-				if (n == -1)
-					break;
-				
-				const int a = s.pstate[c1];
-				const int b = s.pstate[c2];
-
-				bp += 3;
-				
-				int v = a & b;
-				if (!v)
-				{
-					v = a | b;
-					DPRINT("Visiting " << n << " c1=" << c1 << " c2=" << c2 << " union " << (int)a << " | " << (int)b << " score=" << mindist[v]);
-					sum += mindist[v];
-				}
-				
-				DPRINT("writing pstate[" << n << "] [" << i << "/" << s.netsize << "] = " << v);
-				s.pstate[n] = v;
-			}
-			
-			int rootKid = s.net[s.root].c1;
-			if (rootKid < 0)
-				rootKid = s.net[s.root].c2;
-				
-			int rv = s.pstate[rootKid] & s.pstate[s.root];
-			if (!rv)
-			{
-				DPRINT(" root adds some too " << (int)(s.pstate[rootKid] | s.pstate[s.root]) << " " << (int)rootKid << " " << mindist[s.pstate[rootKid] | s.pstate[s.root]]);
-				DPRINT(" mindislookup = " << (int)(s.pstate[rootKid]|s.pstate[s.root]));
-				DPRINT(" pstate root = " << s.pstate[s.root]);
-				DPRINT(" pstate kid = " << s.pstate[rootKid] << " slot=" << rootKid);
-				sum += mindist[s.pstate[rootKid] | s.pstate[s.root]];
-			}
-		}
-		
-		DPRINT("Optimized sum = " << sum);
-		// -- lala lala --
-		return sum;
 	}
 }

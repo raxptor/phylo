@@ -5,7 +5,7 @@ namespace character
 {
 	enum 
 	{
-		UNKNOWN_CHAR_VALUE = 4
+		UNKNOWN_CHAR_VALUE = 9
 	};
 
 	typedef unsigned char state_t;

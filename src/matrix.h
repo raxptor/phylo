@@ -7,11 +7,26 @@ namespace matrix
 {
 	struct idata;
 	
+	struct cinfo
+	{
+		int weight;
+	};
+	
+	struct cgroup
+	{
+		unsigned int count;		// number of characters in group
+		unsigned int bits;		// bits needed per value (1 per value)
+		cinfo *info;			// additional information
+		character::state_t *submatrix;  // [taxon][count] sized array
+	};
+	
 	struct data
 	{
 		unsigned int characters;
 		unsigned int taxons;
-		character::state_t **taxonbase;
+		
+		cgroup unordered;
+		cgroup ordered;
 		
 		// internal
 		idata *_id;

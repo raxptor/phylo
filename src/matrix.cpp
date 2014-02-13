@@ -12,33 +12,132 @@ namespace matrix
 {
 	struct idata
 	{
-		character::buf *cbuf;	
-		unsigned int pitch;
 		std::vector<std::string> c_name, t_name;
+		std::vector<std::string> taxon_lines;
 		int maxtlen;
 	};
 	
-	data *alloc(unsigned int taxons, unsigned int characters)
+	data *alloc()
 	{
 		data *d = new data();
-		d->_id = new idata();
 
-		d->taxonbase = new character::state_t*[taxons];
-		d->_id->cbuf = character::alloc(characters, taxons, d->taxonbase);
+		d->characters = 0;
+		d->taxons = 0;
+		
+		memset(&d->ordered, 0x00, sizeof(cgroup));
+		memset(&d->unordered, 0x00, sizeof(cgroup));
+		
+		d->_id = new idata();
 		d->_id->maxtlen = 12;
-		
-		d->taxons = taxons;
-		d->characters = characters;
-		
-		
 		return d;
 	}
 	
 	void free(data *d)
 	{
-		character::free(d->_id->cbuf);
+		delete [] d->ordered.submatrix;
+		delete [] d->unordered.submatrix;
 		delete d->_id;
 		delete d;
+	}
+	
+	void sort_characters(character::state_t *mtx, data *out)
+	{
+		// rows in mtx are taxons
+		
+		std::vector<int> ordered;
+		std::vector<int> unordered;
+
+		out->ordered.bits = 0;
+		out->unordered.bits = 0;
+		
+		int discarded = 0;
+		
+		for (int i=0;i<out->characters;i++)
+		{
+			bool used[256];
+			int count = 0;
+			memset(used, 0x00, 256 * sizeof(bool));
+
+			// make the range 0-based		
+			int min = 100000;
+			for (int j=0;j<out->taxons;j++)
+			{
+				character::state_t val = mtx[j * out->characters + i];
+				if (val == character::UNKNOWN_CHAR_VALUE)
+					continue;
+					
+				if (val < min) 
+					min = val;
+			}
+			
+			int bits = 0;
+			for (int j=0;j<out->taxons;j++)
+			{
+				character::state_t & val = mtx[j * out->characters + i];
+				if (val == character::UNKNOWN_CHAR_VALUE)
+					continue;
+				
+				val -= min;
+				
+				if ((val+1) > bits)
+					bits = (val+1);
+				
+				if (!used[val])
+				{
+					used[val] = true;
+					count++;
+				}
+			}
+				
+			if (count == 1)
+			{
+				discarded++;
+				std::cout << "[matrix] - discarding character " << i << " because it has only 1 value" << std::endl;
+				continue;
+			}
+			
+			cgroup *tgt;
+			
+			if (used[0] && used[1] && (count == 2 || (count == 3 && used[character::UNKNOWN_CHAR_VALUE])))
+			{
+				tgt = &out->unordered;
+				unordered.push_back(i);
+			}
+			else
+			{
+				tgt = &out->ordered;
+				ordered.push_back(i);
+			}
+			
+			if (bits > tgt->bits)
+				tgt->bits = bits;
+		}
+		
+		out->ordered.count = ordered.size();
+		out->unordered.count = unordered.size();
+
+		out->ordered.submatrix = new character::state_t[ordered.size() * out->taxons];
+		out->unordered.submatrix = new character::state_t[unordered.size() * out->taxons];
+		
+		// Rotate all characters into their matrix
+		//
+		// c   taxons
+		// 0: [abcdefg] 
+		// 1: [abcdefg]
+		//
+		for (unsigned int i=0;i<ordered.size();i++)
+		{
+			for (unsigned int j=0;j<out->taxons;j++)
+				out->ordered.submatrix[i * out->taxons + j] = mtx[j * out->characters + ordered[i]];
+		}
+
+		for (unsigned int i=0;i<unordered.size();i++)
+		{
+			for (unsigned int j=0;j<out->taxons;j++)
+				out->unordered.submatrix[i * out->taxons + j] = mtx[j * out->characters + unordered[i]];
+		}
+		
+		std::cout << "[matrix] - Processed " << out->characters << " characters into " << out->ordered.count << " ordered and " << out->unordered.count << " unordered, " << discarded  << " discarded." << std::endl;
 	}
 	
 	data* load(const char *fn)
@@ -96,21 +195,32 @@ namespace matrix
 			}
 		}
 		
-		std::cout << "Loaded matrix with " << t.size() << " taxons and " << c[0].size() << " characters." << std::endl;
 		
-		data *d = alloc(t.size(), c[0].size());
+		data *d = alloc();
 		d->_id->maxtlen = 0;
+		d->characters = c[0].size();
+		d->taxons = t.size();
+		
+		// Temporary buffer for preprocessing
+		character::state_t *mtx = new character::state_t[d->characters * d->taxons];
 		
 		for (unsigned int i=0;i<t.size();i++)
 		{
 			// max taxon name length for pretty printing
 			if (t[i].size() > d->_id->maxtlen)
 				d->_id->maxtlen = t[i].size();
-				
-			character::from_string(c[i].c_str(), d->taxonbase[i]);
+			
+			// --
+			character::from_string(c[i].c_str(), &mtx[i * d->characters]);
 		}
 		
+		sort_characters(mtx, d);
+		
+		delete [] mtx;
+		
 		d->_id->t_name = t;
+
+		std::cout << "[matrix] - Done loading matrix with " << t.size() << " taxons and " << c[0].size() << " characters." << std::endl;
 		return d;
 	}
 	
@@ -132,31 +242,6 @@ namespace matrix
 
 	void print(data *d)
 	{
-		for (int i=0;i<d->taxons;i++)
-		{
-			std::string n = taxon_name(d, i);
-			std::cout << n;
-			for (int j=0;j<d->_id->maxtlen-n.size();j++)
-				std::cout << " ";
-				
-			std::cout << " => " << character::to_string(d->taxonbase[i], d->characters);
-			std::cout << std::endl;
-		}
-		
-		std::stringstream tmp;
-		tmp.setf(std::ios::left, std::ios::adjustfield);
-
-		for (int i=0;i<d->taxons;i++)
-		{
-			for (int j=0;j<=i;j++)
-			{
-				tmp.width(4);
-				tmp << character::distance(d->taxonbase[i], d->taxonbase[j], d->characters);
-			}
-			tmp << "\n";
-		}
-		
-		std::cout << std::endl;
-		std::cout << tmp.str() << std::endl;
+	
 	}
 }

@@ -1,3 +1,4 @@
+/*
 #include "tree.h"
 #include "character.h"
 
@@ -252,3 +253,4 @@ namespace tree
 	}
 	
 }
+*/

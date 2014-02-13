@@ -254,9 +254,10 @@ namespace network
 	
 	void print_characters(data *d)
 	{
+		std::cout << "print_characters FIXME" << std::endl;
 		for (int i=0;i<d->allocnodes;i++)
 		{
-			std::cout << i << " " << character::to_string(d->matrix->taxonbase[i], d->mtx_characters) << std::endl;
+			// std::cout << i << " " << character::to_string(d->matrix->taxonbase[i], d->mtx_characters) << std::endl;
 		}
 	}
 
