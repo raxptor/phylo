@@ -71,7 +71,6 @@ namespace newick
 					cont.append("(");
 					first = false;
 				}
-				
 				cont.append(subnet(d, c[i], where, false));
 			}
 		}

@@ -30,13 +30,10 @@ namespace tbr
 	void announce_and_copy(output *out, network::data *best, int new_dist)
 	{
 		network::copy(out->best_network, best);
-		out->best_network->dist = new_dist;
-		
-		//
 		network::recompute_dist(out->best_network);
 		if (out->best_network->dist != new_dist)
 		{
-			std::cerr << "err: tbr produced false distance" << std::endl;
+			std::cerr << "err: tbr produced false distance (" << new_dist <<") but (" << out->best_network->dist << ")" << std::endl;
 			exit(-2);
 		}
 	}
@@ -158,8 +155,17 @@ namespace tbr
 				character::distance_t new_dist = optimize::optimize(d, true);
 				
 				// actually construct it
-				if (new_dist < out->best_network->dist || (new_dist == out->best_network->dist && rand_u32()%32 == 0))
+				if (new_dist < out->best_network->dist) {
 					announce_and_copy(out, d, new_dist);
+					out->equal_length.clear();
+				}
+					
+				if (new_dist == out->best_network->dist)
+				{
+					//std::cout << "aaah " << newick::from_network(d, 0) << std::endl;
+					if (out->equal_length.size() < 2000)
+						out->equal_length.insert(newick::from_network(d, 0));
+				}
 					
 				// restore
 				d->network[_b0] = b0;
@@ -191,7 +197,7 @@ namespace tbr
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
 		
-		character::distance_t org_dist = d->dist;
+		character::distance_t org_dist = optimize::optimize(d);
 		
 		network::data *td = network::alloc(d->matrix);
 
@@ -237,7 +243,7 @@ namespace tbr
 
 					DPRINT("Re-inserting taxon " << np.pairs[j] << " " << np.pairs[j+1]);
 					network::insert(d, np.pairs[j], np.pairs[j+1], taxon);
-					optimize::optimize(d);
+					network::recompute_dist(d);
 					DPRINT("done");
 
 					if (d->dist < out->best_network->dist)

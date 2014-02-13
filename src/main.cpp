@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 
 #include "optimize.h"
 #include "matrix.h"
@@ -98,7 +99,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 4;
+		const int num = 3;
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = dumb::make(mtx);
@@ -106,9 +107,14 @@ int main(int argc, const char **argv)
 		tbr::output out;
 		out.best_network = network::alloc(mtx);
 		network::copy(out.best_network, nw[0]);
+		network::recompute_dist(out.best_network);
+		
+		std::cout << "Starting ratchet with random tree dist=" << out.best_network->dist << std::endl;
 
-		for (int i=0;i<10000;i++)
+		for (int i=0;i<1000;i++)
 		{
+			int oc = out.equal_length.size();
+			
 			for (int j=0;j<num;j++)
 				ratchet::run(nw[j], &out);
 
@@ -117,12 +123,17 @@ int main(int argc, const char **argv)
 				for (int j=i+1;j<num;j++)
 					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
 						dumb::make_inplace(nw[j]);
-				
+						
+			if (oc != out.equal_length.size())
+			{
+				std::cout << "[ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.best_network->dist << ")" << std::endl;
+			}
 		}
 
 		std::cout << std::endl;
-		std::cout << "Done. Best network (" << out.best_network->dist << ") ==> ";
+		std::cout << "Done. Best network (" << out.best_network->dist << ") actual (" << optimize::optimize(out.best_network) << " ==> ";
 		newick::print(out.best_network);
+		network::print_characters(out.best_network);
 	}
 	
 	matrix::free(mtx);	
