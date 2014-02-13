@@ -1,0 +1,4 @@
+dragon     34
+dinosaur   23
+ranardath  12
+rax        01
