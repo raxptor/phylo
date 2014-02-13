@@ -57,13 +57,27 @@ namespace optimize
 	}
 	
 	int is_single[256];
+	int first[256];
 
 	void init()
 	{
 		for (int i=0;i<256;i++)
 			is_single[i] = -1;
+			
 		for (int i=0;i<32;i++)
 			is_single[0 << i] = i;
+		
+		for (int j=0;j<256;j++)
+		{
+			first[j] = -1;
+			for (int i=0;i<8;i++)
+				if (j & (1 << i))
+				{
+					first[j] = i;
+					break;
+				}
+		}
+			
 		is_single[0 << character::UNKNOWN_CHAR_VALUE] = -1;
 	}
 
@@ -76,7 +90,7 @@ namespace optimize
 	}
 	
 	// these are all valid values
-	character::distance_t dist(character::state_t a, character::state_t b)
+	inline character::distance_t dist(character::state_t a, character::state_t b)
 	{
 		if (a > b) 
 			return a - b; 
@@ -151,11 +165,7 @@ namespace optimize
 					// definite value
 					DPRINT("writing single value " << (int)sv << " because mask " << (int)s->bmp[w]);
 					write = sv;
-					if (sv != value)
-					{
-						DPRINT("step from " << (int)sv << " to " << (int)value);
-						s->sum += dist(value, sv);
-					}
+					s->sum += dist(value, sv);
 				}
 				else
 				{
@@ -167,14 +177,8 @@ namespace optimize
 					}
 					else
 					{
-						for (int i=0;i<32;i++)
-						{
-							if (mask(i) & s->bmp[w])
-							{
-								write = i;
-								break;
-							}
-						}
+						const int f = first[s->bmp[w]];
+						write = f != -1 ? f : value; 
 					}
 				}
 				
