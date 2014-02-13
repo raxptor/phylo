@@ -23,7 +23,7 @@ namespace bruteforce
 		std::vector<edge> _edges;
 		long long _visited = 0;
 		character::distance_t _best_distance;
-		std::vector<std::string> _best_network;
+		std::set<std::string> _best_network;
 	}
 	
 	void next_taxon(int which)
@@ -39,7 +39,7 @@ namespace bruteforce
 			}
 		
 			if (_network->dist == _best_distance)
-				_best_network.push_back(newick::from_network(_network, 0));
+				_best_network.insert(newick::from_network(_network, 0));
 			
 			if ((_visited++ % 10000000 == 0) && _visited > 1)
 				std::cout << "...visited " << (_visited/1000000) << "M networks" << std::endl;
@@ -97,7 +97,7 @@ namespace bruteforce
 			if (i == 0 || _network->dist < _best_distance)
 			{
 				_best_network.clear();
-				_best_network.push_back(newick::from_network(_network, 0));
+				_best_network.insert(newick::from_network(_network, 0));
 				_best_distance = optimize::optimize(_network);
 			}
 		}
@@ -124,9 +124,9 @@ namespace bruteforce
 		if (_best_distance < bound || bound == -1)
 		{
 			std::cout << _best_network.size() << " networks share minimal distance " << _best_distance << std::endl;
-			for (unsigned int i=0;i<_best_network.size() && i < 10;i++)
+			for (std::set<std::string>::iterator i=_best_network.begin();i!=_best_network.end();i++)
 			{
-				std::cout << "Network " << i << ": " << _best_network[i] << std::endl;
+				std::cout << (*i) << std::endl;
 			}
 		}
 		else

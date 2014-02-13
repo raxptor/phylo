@@ -169,7 +169,7 @@ namespace optimize
 	}
 	
 	template<typename SCORING_FN>
-	int slow_single_first_pass(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
+	int single_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
 	{
 		int sum = 0;
 		
@@ -252,8 +252,8 @@ namespace optimize
 			
 		DPRINT("Root=" << root << " rootHTU=" << rootHTU);
 
-		const int sum0 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
-		const int sum1 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
+		const int sum0 = single_character_first_pass_calc_length<ordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
+		const int sum1 = single_character_first_pass_calc_length<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
 		const int sum = sum0 + sum1;
 
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
