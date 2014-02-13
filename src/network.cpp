@@ -371,7 +371,7 @@ namespace network
 			const idx_t src = source[queue];
 			--queue;
 			
-			// only HTU
+			// only HTU & root
 			if (cur >= data->mtx_taxons)
 				tmpOrder[tmpOrderOut++] = cur;
 				

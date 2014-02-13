@@ -4,8 +4,8 @@
 
 #include <iostream>
 
-#define DPRINT(x) { std::cout << x << std::endl; }
-//#define DPRINT(x) {};
+//#define DPRINT(x) { std::cout << x << std::endl; }
+#define DPRINT(x) {};
 
 namespace optimize
 {
@@ -26,6 +26,7 @@ namespace optimize
 		char *bmp;
 		network::node *net;
 		int sum;
+		int totsum;
 		int taxons;
 		int netsize;
 		int bottomup[1024];
@@ -63,6 +64,7 @@ namespace optimize
 	}
 	
 	int is_single[256];
+	int mindist[256];
 
 	void init()
 	{
@@ -70,13 +72,30 @@ namespace optimize
 			is_single[i] = -1;
 		for (int i=0;i<32;i++)
 			is_single[0 << i] = i;
-		is_single[0 << character::UNKNOWN_CHAR_VALUE] = -1;
+			
+		for (int i=0;i<256;i++)
+		{
+			mindist[i] = 8;
+			for (int a=0;a<8;a++)
+			{
+				for (int b=a+1;b<8;b++)
+				{
+					if (((1 << a) & i) && ((1 << b) & i))
+					{
+						int d = a - b;
+						if (d < 0) d = -d;
+						if (mindist[i] > d)
+							mindist[i] = d;
+					}
+				}
+			}
+		}
 	}
 
 	inline char mask(int val)
 	{
 		if (val == character::UNKNOWN_CHAR_VALUE)
-			return 0x0;
+			return 0xff;
 			
 		return 1 << val;
 	}
@@ -88,51 +107,9 @@ namespace optimize
 			return a - b; 
 		return b - a;
 	}
-
-	void down(network::data *data, int where, int depth)
-	{
-		if (where == network::NOT_IN_NETWORK)
-			return;
-			
-		std::cout << where << " " << depth << std::endl;
-		down(data, data->network[where].c1, depth + 1);
-		down(data, data->network[where].c2, depth + 1);
-	}
-	
-	char collect_two(optstate *s, int w)
-	{
-		const network::node *net = s->net;
-		const int c1 = net[w].c1;
-		const int c2 = net[w].c2;
-		
-		if (w < s->taxons && w != s->root)
-		{
-			DPRINT("mask[" << w << "] is " << (int)mask(s->cval[w]));
-			return mask(s->cval[w]);
-		}
-		
-		char a=0, b=0;
-		if (c1 != network::NOT_IN_NETWORK)
-			a = collect_two(s, c1);
-		if (c2 != network::NOT_IN_NETWORK)
-			b = collect_two(s, c2);
-			
-		// if intersection exists, use that, otherwise union
-		char tmp = a & b;
-
-		if (!tmp)
-			tmp = a | b;
-
-		DPRINT("mask[" << w << "] is combination " << tmp);
-
-		s->bmp[w] = tmp;
-		return tmp;		
-	}
 	
 	void push_down(optstate *s, int w_, char value_)
 	{
-//		DPRINT("traverse [" << w << "] val=" << (int)value);
-		
 		struct que {
 			int w;
 			char value;
@@ -150,7 +127,7 @@ namespace optimize
 			const int value = next[queue].value;
 			if (w >= s->taxons)
 			{
-				const char sv = is_single[s->bmp[w]];
+				const char sv = is_single[(unsigned char)s->bmp[w]];
 				character::state_t write;
 				if (sv != -1)
 				{
@@ -181,6 +158,7 @@ namespace optimize
 								break;
 							}
 						}
+						DPRINT("writing " << write << " because writemask");
 					}
 				}
 				
@@ -222,19 +200,6 @@ namespace optimize
 		}
 	}
 	
-	void run_character(network::data *data, optstate *s, int i)
-	{
-		s->sum = 0;
-		s->character = i;
-		
-		collect_two(s, s->root);
-		
-		s->bmp[s->root] = mask(s->cval[s->root]);
-		push_down(s, s->net[s->root].c1, s->cval[s->root]);
-		push_down(s, s->net[s->root].c2, s->cval[s->root]);
-		data->opt->chars[i].sum = s->sum;
-	}
-	
 	character::distance_t optimize(network::data *data, bool all_chars)
 	{
 		DPRINT("Treeifying network...");
@@ -244,15 +209,15 @@ namespace optimize
 		
 		s.root = 0;
 		s.taxons = data->mtx_taxons;
+		s.totsum = 0;
 
 		network::treeify(data, 0, s.net, s.bottomup);
-		
-		newick::print(data);
+//		newick::print(data);
 		
 		s.netsize = data->allocnodes;
 		for (int i=0;i<data->allocnodes;i++)
 		{
-			DPRINT("Visit order [" << i << "] = " << s.bottomup[i]);
+//			DPRINT("Visit order [" << i << "] = " << s.bottomup[i]);
 			if (s.bottomup[i] < 0) 
 			{
 				s.netsize = i;
@@ -264,7 +229,7 @@ namespace optimize
 		
 		for (int c=0;c<data->mtx_characters;c++)
 		{
-			for (int i=0;i<s.taxons;i++)
+			for (int i=0;i<data->mtx_taxons;i++)
 				s.pstate[i] = mask(data->characters[i][c]);
 			
 			for (int i=0;i<s.netsize;i++)
@@ -279,47 +244,28 @@ namespace optimize
 				int v = a & b;
 				if (!v)
 				{
-					DPRINT("Visiting " << i << " union " << (int)a << " | " << (int)b);
 					v = a | b;
+					DPRINT("Visiting " << n << " c1=" << c1 << " c2=" << c2 << " union " << (int)a << " | " << (int)b << " score=" << mindist[v]);
 					sum += mindist[v];
 				}
 				
-				s.pstat[i] = v;
+				s.pstate[n] = v;
+				s.bmp[n] = v;
+			}
+			
+			int rootKid = s.net[s.root].c1;
+			if (rootKid < 0)
+				rootKid = s.net[s.root].c2;
+				
+			int rv = s.pstate[rootKid] & s.pstate[s.root];
+			if (!rv)
+			{
+				DPRINT(" root adds some too " << (int)(s.pstate[rootKid] | s.pstate[s.root]) << " " << (int)rootKid << " " << mindist[s.pstate[rootKid] | s.pstate[s.root]]);
+				sum += mindist[s.pstate[rootKid] | s.pstate[s.root]];
 			}
 		}
 		
-/*
-		DPRINT("Optimize netsize = " << s.netsize);
-		
-		
-		int count = 0;
-		for (int i=0;i<data->mtx_characters;i++)
-		{
-			// todo fix charactetrs per row
-			for (int j=0;j<data->allocnodes;j++)
-				s.cval[j] = data->characters[j][i];
-		
-			run_character(data, &s, i);
-
-			for (int j=0;j<data->allocnodes;j++)
-				data->characters[j][i] = s.cval[j];
-		}
-		
-		DPRINT("Recomputed " << count << " characters");
-
-		
-		character::distance_t sum = 0;
-		for (int i=0;i<data->mtx_characters;i++)
-			sum += data->opt->chars[i].sum;
-*/
-		int sum2 = network::distance_by_edges(data);	
-		if (sum != sum2)
-		{
-			network::print_characters(data);
-			std::cerr << "Fucked up the count again " << sum2 << " but i say " << sum << std::endl;
-			exit(1);
-		}
-		DPRINT("  [opt] - prevdist=" << data->dist << " newdist=" << sum);
+		// -- lala lala --
 		return sum;
 	}
 }
