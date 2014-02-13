@@ -1,7 +1,7 @@
 #include "network.h"
 #include "character.h"
 #include <iostream>
-
+#include <cstring>
 
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
