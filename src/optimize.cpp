@@ -215,7 +215,6 @@ namespace optimize
 			
 			DPRINT("offsetroot = " << (cd->count * i + root));
 			DPRINT("root@" << root << " => " << rv);
-			prow[root] = rv;
 		}
 		
 		return sum;	
@@ -253,14 +252,12 @@ namespace optimize
 			
 		DPRINT("Root=" << root << " rootHTU=" << rootHTU);
 
-		int sum0, sum1;
-		sum0 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
-		sum1 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
-		int sum = sum0 + sum1;
-
-//		print_state(st, st->maxnodes, d->mtx_taxons);
+		const int sum0 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
+		const int sum1 = slow_single_first_pass<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
+		const int sum = sum0 + sum1;
 
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
+
 		// -- lala lala --
 		return sum;
 	}
@@ -372,7 +369,5 @@ namespace optimize
 	{
 		DPRINT("[optimize] - Full optimization run.");
 		return optimize_for_tree(data->opt, data, 0);
-		
-		
 	}
 }
