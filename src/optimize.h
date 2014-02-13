@@ -9,7 +9,7 @@ namespace optimize
 {
 	struct optstate;
 
-	optstate *create(int characters, int allocnodes);
+	optstate *create(network::data *);
 	void free(optstate *s);
 	void init();
 	void copy(optstate *target, optstate *source);

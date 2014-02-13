@@ -10,48 +10,54 @@
 
 namespace optimize
 {
-	// character
-	struct ocstate
-	{
-		character::distance_t sum;
-	};
-	
 	struct optstate
 	{
-		ocstate *chars;
 		int characters;
 		
 		// work memory
 		int root;
 		int character;
-		char *bmp;
 		network::node *net;
 		int sum;
 		int totsum;
 		int taxons;
 		int netsize;
 		int bottomup[1024];
-		
 		int pstate[1024];		
-		
 		int cval[1024];
+		
+		unsigned char *char_masks;
+		
 	};
 
-	void copy(optstate *target, optstate *source)
+	inline char mask(int val)
 	{
-		memcpy(target->chars, source->chars, sizeof(ocstate) * source->characters);
+		if (val == character::UNKNOWN_CHAR_VALUE)
+			return 0xff;
+			
+		return 1 << val;
 	}
 	
-	optstate* create(int numchars, int allocnodes)
+	void copy(optstate *target, optstate *source)
+	{
+	
+	}
+	
+	optstate* create(network::data *d)
 	{
 		optstate *st = new optstate();
-		st->chars = new ocstate[numchars];
-		st->bmp = new char[allocnodes];
-		st->net = new network::node[allocnodes];
-		st->characters = numchars;
+		st->taxons = d->mtx_taxons;
+		st->char_masks = new unsigned char[d->mtx_taxons * d->mtx_characters];
+		st->net = new network::node[d->allocnodes];
+		st->characters = d->mtx_characters;
 		
-		for (int i=0;i<numchars;i++)
-			st->chars[i].sum = 0;
+		for (int i=0;i<d->mtx_characters;i++)
+		{
+			for (int j=0;j<d->mtx_taxons;j++)
+			{
+				st->char_masks[i * d->mtx_taxons + j] = mask(d->characters[j][i]);
+			}
+		}
 		
 		return st;
 	}
@@ -59,8 +65,7 @@ namespace optimize
 	void free(optstate *s)
 	{
 		delete [] s->net;
-		delete [] s->bmp;
-		delete [] s->chars;
+		delete [] s->char_masks;
 		delete s;
 	}
 	
@@ -94,14 +99,6 @@ namespace optimize
 		}
 	}
 
-	inline char mask(int val)
-	{
-		if (val == character::UNKNOWN_CHAR_VALUE)
-			return 0xff;
-			
-		return 1 << val;
-	}
-	
 	// these are all valid values
 	inline character::distance_t dist(character::state_t a, character::state_t b)
 	{
@@ -110,6 +107,7 @@ namespace optimize
 		return b - a;
 	}
 	
+	/*
 	void push_down(optstate *s, int w_, char value_)
 	{
 		struct que {
@@ -197,6 +195,7 @@ namespace optimize
 			queue--;
 		}
 	}
+	*/
 	
 	character::distance_t optimize(network::data *data, bool all_chars)
 	{
@@ -234,17 +233,21 @@ namespace optimize
 		
 		for (int c=0;c<data->mtx_characters;c++)
 		{
+			unsigned char *char_masks = s.char_masks + c * data->mtx_taxons;
 			for (int i=0;i<data->mtx_taxons;i++)
-				s.pstate[i] = mask(data->characters[i][c]);
+				s.pstate[i] = char_masks[i];
 			
+			const int *bp = s.bottomup;
 			for (int i=0;i<s.netsize;i+=3)
 			{
-				const int n = s.bottomup[i];
-				const int c1 = s.bottomup[i+1];
-				const int c2 = s.bottomup[i+2];
-
+				const int n = bp[0];
+				const int c1 = bp[1];
+				const int c2 = bp[2];
+				
 				const int a = s.pstate[c1];
 				const int b = s.pstate[c2];
+
+				bp += 3;
 				
 				int v = a & b;
 				if (!v)
@@ -256,7 +259,6 @@ namespace optimize
 				
 				DPRINT("writing pstate[" << n << "] [" << i << "/" << s.netsize << "] = " << v);
 				s.pstate[n] = v;
-				s.bmp[n] = v;
 			}
 			
 			int rootKid = s.net[s.root].c1;

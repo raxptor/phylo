@@ -28,7 +28,6 @@ namespace network
 		d->mtx_taxons = mtx->taxons;
 		d->mtx_characters = mtx->characters;
 		d->allocnodes = 2 * mtx->taxons - 2;
-		d->opt = optimize::create(mtx->characters, d->allocnodes);
 		d->network = new node[d->allocnodes];
 		d->characters = new character::state_t*[d->allocnodes];
 		d->cbuf = character::alloc(mtx->characters, d->allocnodes, d->characters);
@@ -42,6 +41,8 @@ namespace network
 		d->freelist = new idx_t[d->freecount];
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + mtx->taxons;
+
+		d->opt = optimize::create(d);
 			
 		return d;
 	}

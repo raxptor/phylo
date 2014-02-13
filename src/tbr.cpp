@@ -22,7 +22,7 @@ namespace tbr
 	
 	inline void count_networks()
 	{
-		if (++networks % 10000000 == 0)
+		if (++networks % 1000000 == 0)
 			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
 	}
 
