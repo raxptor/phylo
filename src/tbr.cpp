@@ -73,8 +73,6 @@ namespace tbr
 			return;
 		}
 		
-		character::state_t **ch = d->characters;
-		
 		network::edge_merge(d->network, out0[0], out0[1], n0);
 		network::edge_merge(d->network, out1[0], out1[1], n1);
 
@@ -115,9 +113,6 @@ namespace tbr
 			}
 		}
 		*/
-		const int chars = d->mtx_characters;
-		character::state_t **ch = d->characters;
-
 		network::idx_t a = network::node_alloc(d);
 		network::idx_t b = network::node_alloc(d);
 		
@@ -127,10 +122,6 @@ namespace tbr
 			const network::idx_t _a1 = net0.pairs[i+1];
 			const network::node a0 = d->network[_a0];
 			const network::node a1 = d->network[_a1];
-			
-			// edge
-			const character::distance_t diff = character::distance(ch[_a0], ch[_a1], chars);
-			d->dist -= diff;
 			
 			for (int j=0;j<net1.count;j+=2)
 			{
@@ -173,18 +164,8 @@ namespace tbr
 				d->network[_a0] = a0;
 				d->network[_a1] = a1;
 
-				/*
-				for (int i=0;i<d->allocnodes;i++)
-				{
-					DPRINT("node[" << i << "] " << d->network[i].c0 << "," << d->network[i].c1 << "," << d->network[i].c2);
-				}
-				*/
-				
 				count_networks();
 			}
-			
-			// first net's edge put back in, connections restored
-			d->dist += diff;
 		}
 		
 		network::node_free(d, a);

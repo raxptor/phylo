@@ -29,11 +29,6 @@ namespace network
 		d->mtx_characters = mtx->characters;
 		d->allocnodes = 2 * mtx->taxons - 2;
 		d->network = new node[d->allocnodes];
-		d->characters = new character::state_t*[d->allocnodes];
-		d->cbuf = character::alloc(mtx->characters, d->allocnodes, d->characters);
-		
-		for (int i=0;i<mtx->taxons;i++)
-			character::copy(d->characters[i], mtx->taxonbase[i], mtx->characters);
 
 		// free list
 		d->dist = 0;
@@ -43,7 +38,6 @@ namespace network
 			d->freelist[i] = i + mtx->taxons;
 
 		d->opt = optimize::create(d);
-			
 		return d;
 	}
 	
@@ -51,32 +45,16 @@ namespace network
 	void copy(data *target, data *source)
 	{
 		memcpy(target->network, source->network, sizeof(node) * source->allocnodes);
-		character::copy(target->cbuf, source->cbuf);
 		optimize::copy(target->opt, source->opt);
 		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
 		target->freecount = source->freecount;
 		target->dist = source->dist;
 	}
-	
-	character::distance_t distance_by_edges(data *target)
-	{
-		edgelist e;
-		trace_edgelist(target, 0, &e);
-		int tdist = 0;
-
-		for (int i=0;i<e.count;i+=2)
-		{
-			character::distance_t dist = character::distance(target->characters[e.pairs[i]], target->characters[e.pairs[i+1]], target->mtx_characters);
-			tdist += dist;
-			DPRINT(" -> recompute dist, dist=" << dist << " for " << e.pairs[i] << "-" << e.pairs[i+1]);
-		}
-		return tdist;	
-	}
-	
+		
 	void recompute_dist(data *target)
 	{
 		target->dist = optimize::optimize(target);
-		
+
 #if defined(NETWORK_CHECKS)
 		if (distance_by_edges(target) != target->dist)
 		{
@@ -88,10 +66,8 @@ namespace network
 
 	void free(data *d)
 	{
-		delete [] d->characters;
 		delete [] d->network;
 		optimize::free(d->opt);
-		character::free(d->cbuf);
 		delete d;
 	}
 
@@ -108,7 +84,6 @@ namespace network
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + d->matrix->taxons;
 	
-		d->dist = character::distance(d->characters[taxon0], d->characters[taxon1], d->mtx_characters);
 		d->network[taxon0].c0 = taxon1;
 		d->network[taxon1].c0 = taxon0;
 		
@@ -177,7 +152,6 @@ namespace network
 		node * const net = d->network;
 		
 		const idx_t n = node_alloc(d);
-		const int chars = d->mtx_characters;
 
 		// insert middle		
 		edge_split(d->network, n0, n1, n);
@@ -233,32 +207,7 @@ namespace network
 			std::cerr << "the-two-others error: node " << which << " is no neighbour of " << where << std::endl;
 		}
 	}
-	
-	bool character_fiddle(data *d, int target, int changes)
-	{
-		if (d->dist == target)
-			return true;
-		if (changes == 0)
-			return false;
-			
-		int fd = 0;
-		for (int i=d->mtx_taxons;i<d->allocnodes;i++)
-		{
-			for (int j=0;j<d->mtx_characters;j++)
-			{
-				d->characters[i][j] ^= 1;
-				recompute_dist(d);
-				
-				if (character_fiddle(d, target, changes-1))
-					return true;
-				
-				d->characters[i][j] ^= 1;
-			}
-		}
-		recompute_dist(d);
-		return false;
-	}
-	
+
 	void disconnect(data *d, idx_t which)
 	{
 		node * network = d->network;
@@ -307,7 +256,7 @@ namespace network
 	{
 		for (int i=0;i<d->allocnodes;i++)
 		{
-			std::cout << i << " " << character::to_string(d->characters[i], d->mtx_characters) << std::endl;
+			std::cout << i << " " << character::to_string(d->matrix->taxonbase[i], d->mtx_characters) << std::endl;
 		}
 	}
 

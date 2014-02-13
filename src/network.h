@@ -31,7 +31,6 @@ namespace network
 	{
 		node *network;
 		optimize::optstate *opt;
-		character::state_t **characters;
 		int mtx_taxons, mtx_characters;
 		int dist;
 		int freecount;
@@ -40,8 +39,6 @@ namespace network
 		// never touched during processing
 		int allocnodes;
 		matrix::data *matrix;		
-		character::buf *cbuf;
-		character::distance_t *dist_cache;
 	};
 	
 	data* alloc(matrix::data *mtx);
@@ -71,8 +68,6 @@ namespace network
 	
 	void print_characters(data *d);
 
-	bool character_fiddle(data *, int target, int tries);
-	
 	void free(data *d);
 }
 

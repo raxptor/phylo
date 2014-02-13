@@ -26,10 +26,12 @@ namespace ratchet
 		
 		network::data *new_net = network::alloc(d->matrix);
 		network::copy(new_net, d);
-		
+
+/*		
 		// manipulate & recalc
 		for (int i=0;i<d->allocnodes;i++)
 			character::toggle_boost(new_net->characters[i], picks, boosts);
+*/
 
 		// set up temporary output structure for tbr, we won't record any of these
 		// networks as final		
@@ -46,9 +48,11 @@ namespace ratchet
 
 		network::free(tout.best_network);
 
+/*
 		// un-do boost
 		for (int i=0;i<d->allocnodes;i++)
 			character::toggle_boost(new_net->characters[i], picks, boosts);
+*/
 			
 		network::recompute_dist(new_net);	
 
@@ -65,7 +69,7 @@ namespace ratchet
 			if (new_net->dist < prestore)
 			{
 				int d = new_net->dist;
-				new_net->dist = network::distance_by_edges(new_net);;
+				new_net->dist = optimize::optimize(new_net);
 				std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") previous(" << prestore << ")" << std::endl;
 				newick::print(new_net);
 				network::copy(out->best_network, new_net);

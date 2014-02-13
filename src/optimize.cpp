@@ -55,7 +55,7 @@ namespace optimize
 		{
 			for (int j=0;j<d->mtx_taxons;j++)
 			{
-				st->char_masks[i * d->mtx_taxons + j] = mask(d->characters[j][i]);
+				st->char_masks[i * d->mtx_taxons + j] = mask(d->matrix->taxonbase[j][i]);
 			}
 		}
 		
