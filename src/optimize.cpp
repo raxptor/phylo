@@ -238,11 +238,14 @@ namespace optimize
 				s.pstate[i] = char_masks[i];
 			
 			const int *bp = s.bottomup;
-			for (int i=0;i<s.netsize;i+=3)
+			while (true)
 			{
 				const int n = bp[0];
 				const int c1 = bp[1];
 				const int c2 = bp[2];
+				
+				if (n == -1)
+					break;
 				
 				const int a = s.pstate[c1];
 				const int b = s.pstate[c2];
