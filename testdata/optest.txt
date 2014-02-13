@@ -1,0 +1,7 @@
+dragon	   1
+dinosaur   1
+ranardath  3
+rax	   ?
+banana	   2
+gurka      ?
+hejsan     2
