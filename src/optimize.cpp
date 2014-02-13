@@ -3,6 +3,7 @@
 #include "newick.h"
 
 #include <iostream>
+#include <cstring>
 
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
@@ -70,6 +71,7 @@ namespace optimize
 	{
 		for (int i=0;i<256;i++)
 			is_single[i] = -1;
+			
 		for (int i=0;i<32;i++)
 			is_single[0 << i] = i;
 			
@@ -101,7 +103,7 @@ namespace optimize
 	}
 	
 	// these are all valid values
-	character::distance_t dist(character::state_t a, character::state_t b)
+	inline character::distance_t dist(character::state_t a, character::state_t b)
 	{
 		if (a > b) 
 			return a - b; 
@@ -134,11 +136,7 @@ namespace optimize
 					// definite value
 					DPRINT("writing single value " << (int)sv << " because mask " << (int)s->bmp[w]);
 					write = sv;
-					if (sv != value)
-					{
-						DPRINT("step from " << (int)sv << " to " << (int)value);
-						s->sum += dist(value, sv);
-					}
+					s->sum += dist(value, sv);
 				}
 				else
 				{

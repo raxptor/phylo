@@ -1,6 +1,7 @@
 #ifndef __TBR_H__
 #define __TBR_H__
 
+#include <string>
 #include <set>
 
 namespace network { struct data; }
