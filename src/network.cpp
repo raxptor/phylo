@@ -373,8 +373,16 @@ namespace network
 			
 			// only HTU & root
 			if (cur >= data->mtx_taxons)
+			{
 				tmpOrder[tmpOrderOut++] = cur;
-				
+				if (net[cur].c0 != src)
+					tmpOrder[tmpOrderOut++] = net[cur].c0;		
+				if (net[cur].c1 != src)
+					tmpOrder[tmpOrderOut++] = net[cur].c1;
+				if (net[cur].c2 != src)
+					tmpOrder[tmpOrderOut++] = net[cur].c2;
+			}
+			
 			// always make c0 point upwards
 			out[cur] = net[cur];
 			
@@ -395,10 +403,14 @@ namespace network
 			}
 		}
 		
-		for (int i=0;i<tmpOrderOut;i++)
-			bottomup[i] = tmpOrder[tmpOrderOut-1-i];
-		if (tmpOrderOut != data->allocnodes)
-			bottomup[tmpOrderOut] = -1;
+		for (int i=0;i<tmpOrderOut;i+=3)
+		{
+			int up = tmpOrderOut - 3 - i;
+			bottomup[up] = tmpOrder[i];
+			bottomup[up+1] = tmpOrder[i+1];
+			bottomup[up+2] = tmpOrder[i+2];
+		}
+		bottomup[tmpOrderOut] = -1;
 	}
 	
 

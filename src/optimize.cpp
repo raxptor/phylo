@@ -212,16 +212,23 @@ namespace optimize
 		network::treeify(data, 0, s.net, s.bottomup);
 //		newick::print(data);
 		
-		s.netsize = data->allocnodes;
-		for (int i=0;i<data->allocnodes;i++)
+		s.netsize = 1;
+		for (int i=0;i<2048;i++)
 		{
-//			DPRINT("Visit order [" << i << "] = " << s.bottomup[i]);
 			if (s.bottomup[i] < 0) 
 			{
 				s.netsize = i;
 				break;
 			}
 		}
+		
+		if (s.netsize % 3)
+		{
+			std::cerr << "Visit order is not %3=0, it is " << s.netsize << "!" << std::endl;
+			exit(-2);
+		}
+		
+		DPRINT("Netsize = " << s.netsize);		
 		
 		int sum = 0;
 		
@@ -230,11 +237,11 @@ namespace optimize
 			for (int i=0;i<data->mtx_taxons;i++)
 				s.pstate[i] = mask(data->characters[i][c]);
 			
-			for (int i=0;i<s.netsize;i++)
+			for (int i=0;i<s.netsize;i+=3)
 			{
 				const int n = s.bottomup[i];
-				const int c1 = s.net[n].c1;
-				const int c2 = s.net[n].c2;
+				const int c1 = s.bottomup[i+1];
+				const int c2 = s.bottomup[i+2];
 
 				const int a = s.pstate[c1];
 				const int b = s.pstate[c2];
@@ -247,6 +254,7 @@ namespace optimize
 					sum += mindist[v];
 				}
 				
+				DPRINT("writing pstate[" << n << "] [" << i << "/" << s.netsize << "] = " << v);
 				s.pstate[n] = v;
 				s.bmp[n] = v;
 			}
@@ -259,10 +267,14 @@ namespace optimize
 			if (!rv)
 			{
 				DPRINT(" root adds some too " << (int)(s.pstate[rootKid] | s.pstate[s.root]) << " " << (int)rootKid << " " << mindist[s.pstate[rootKid] | s.pstate[s.root]]);
+				DPRINT(" mindislookup = " << (int)(s.pstate[rootKid]|s.pstate[s.root]));
+				DPRINT(" pstate root = " << s.pstate[s.root]);
+				DPRINT(" pstate kid = " << s.pstate[rootKid] << " slot=" << rootKid);
 				sum += mindist[s.pstate[rootKid] | s.pstate[s.root]];
 			}
 		}
 		
+		DPRINT("Optimized sum = " << sum);
 		// -- lala lala --
 		return sum;
 	}
