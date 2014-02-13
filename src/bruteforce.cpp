@@ -29,22 +29,17 @@ namespace bruteforce
 	void next_taxon(int which)
 	{
 		if (which == _network->mtx_taxons)
-		{
-			if (_network->dist > _best_distance)
+		{	
+			if (_network->dist < _best_distance)
 			{
+				std::cout << " -> Best new distance " << _network->dist << std::endl;
+				_best_network.clear();
+				_best_distance = _network->dist;
+				newick::print(_network);
 			}
-			else
-			{
-				if (_network->dist < _best_distance)
-				{
-					std::cout << " -> Best new distance " << _network->dist << std::endl;
-					_best_network.clear();
-					_best_distance = _network->dist;
-					newick::print(_network);
-					network::print_characters(_network);
-				}
+		
+			if (_network->dist == _best_distance)
 				_best_network.push_back(newick::from_network(_network, 0));
-			}
 			
 			if ((_visited++ % 10000000 == 0) && _visited > 1)
 				std::cout << "...visited " << (_visited/1000000) << "M networks" << std::endl;
@@ -57,32 +52,29 @@ namespace bruteforce
 			edge tmp = _edges[i];
 			network::idx_t neu = network::insert(_network, _edges[i].n0, _edges[i].n1, which);
 			
-			optimize::optimize(_network);
+			_edges[i].n0 = tmp.n0;
+			_edges[i].n1 = neu;
 			
+			edge e1;
+			e1.n0 = which;
+			e1.n1 = neu;
+			
+			edge e2;
+			e2.n0 = neu;
+			e2.n1 = tmp.n1;
+			
+			_edges.push_back(e1);
+			_edges.push_back(e2);
+			
+			network::recompute_dist(_network);
 			if (_network->dist <= _best_distance)
-			{
-				_edges[i].n0 = tmp.n0;
-				_edges[i].n1 = neu;
-				
-				edge e1;
-				e1.n0 = which;
-				e1.n1 = neu;
-				
-				edge e2;
-				e2.n0 = neu;
-				e2.n1 = tmp.n1;
-				
-				_edges.push_back(e1);
-				_edges.push_back(e2);
-				
 				next_taxon(which+1);
-				
-				_edges.pop_back();
-				_edges.pop_back();
+			
+			_edges.pop_back();
+			_edges.pop_back();
 
-				// restore			
-				_edges[i] = tmp;
-			}
+			// restore			
+			_edges[i] = tmp;
 			
 			network::disconnect(_network, which);
 		}		
@@ -106,7 +98,7 @@ namespace bruteforce
 			{
 				_best_network.clear();
 				_best_network.push_back(newick::from_network(_network, 0));
-				_best_distance = _network->dist;
+				_best_distance = optimize::optimize(_network);
 			}
 		}
 		

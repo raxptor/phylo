@@ -4,6 +4,8 @@
 #include "matrix.h"
 #include "character.h"
 
+namespace optimize { struct optstate; }
+
 namespace network
 {
 	typedef int idx_t;
@@ -28,6 +30,7 @@ namespace network
 	struct data
 	{
 		node *network;
+		optimize::optstate *opt;
 		character::state_t **characters;
 		int mtx_taxons, mtx_characters;
 		int dist;
@@ -43,7 +46,11 @@ namespace network
 	
 	data* alloc(matrix::data *mtx);
 	void copy(data *target, data *source);
+	
 	void recompute_dist(data *target);
+
+	// might not be optibal distance
+	int distance_by_edges(data *target);
 	
 	void init(data *d, idx_t taxon0, idx_t taxon1);
 	

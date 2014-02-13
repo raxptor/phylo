@@ -30,11 +30,10 @@ namespace tbr
 	void announce_and_copy(output *out, network::data *best, int new_dist)
 	{
 		network::copy(out->best_network, best);
-		out->best_network->dist = new_dist;
 		network::recompute_dist(out->best_network);
 		if (out->best_network->dist != new_dist)
 		{
-			std::cerr << "err: tbr produced false distance" << std::endl;
+			std::cerr << "err: tbr produced false distance (" << new_dist <<") but (" << out->best_network->dist << ")" << std::endl;
 			exit(-2);
 		}
 	}
@@ -74,26 +73,11 @@ namespace tbr
 			return;
 		}
 		
-		//
-		DPRINT("Disconnecting...");
+		character::state_t **ch = d->characters;
+		
 		network::edge_merge(d->network, out0[0], out0[1], n0);
 		network::edge_merge(d->network, out1[0], out1[1], n1);
-		
-		const int chars = d->mtx_characters;
 
-		// subtract the > and < edges
-
-		d->dist -= character::distance(d->characters[n0], d->characters[out0[0]], chars);
-		d->dist -= character::distance(d->characters[n0], d->characters[out0[1]], chars);
-		d->dist -= character::distance(d->characters[n1], d->characters[out1[0]], chars);
-		d->dist -= character::distance(d->characters[n1], d->characters[out1[1]], chars);
-		
-		// ..and this edge
-		d->dist -= character::distance(d->characters[n0], d->characters[n1], chars);
-		
-		d->dist += character::distance(d->characters[out0[0]], d->characters[out0[1]], chars);
-		d->dist += character::distance(d->characters[out1[0]], d->characters[out1[1]], chars);
-		
 		network::node_free(d, n0);
 		network::node_free(d, n1);
 		
@@ -154,48 +138,41 @@ namespace tbr
 				const network::idx_t _b1 = net1.pairs[j+1];
 			
 				DPRINT("Gluing together " << _a0 << "-" << _a1 << " with " << _b0 << "-" << _b1);
-
-				// calculate what distance would be here
-				character::distance_t new_dist = d->dist - character::distance(ch[_b0], ch[_b1], chars);
 				
 				// -----------------------------------------------------------
 				// TODO: Calculating this four-way thing should be easy to do
-				//       much more efficient than this.
 				
-				// outer a0-a1-b0 => a
-				character::threesome(ch[_a0], ch[_a1], ch[_b0], ch[a], chars);
-				// inner b0-b1-a => b
-				character::threesome(ch[_b0], ch[_b1], ch[a], ch[b], chars);
+				const network::node b0 = d->network[_b0];
+				const network::node b1 = d->network[_b1];
 				
-				new_dist += character::distance(ch[_a0], ch[a], chars);
-				new_dist += character::distance(ch[_a1], ch[a], chars);
-				new_dist += character::distance(ch[_b0], ch[b], chars);
-				new_dist += character::distance(ch[_b1], ch[b], chars);
-				new_dist += character::distance(ch[a], ch[b], chars);
+				network::edge_split(d->network, _a0, _a1, a);
+				network::edge_split(d->network, _b0, _b1, b);
+
+				// merge 
+				d->network[a].c2 = b;
+				d->network[b].c2 = a;
+				
+				character::distance_t new_dist = optimize::optimize(d, true);
 				
 				// actually construct it
-				DPRINT("New distance " << new_dist << " vs " << out->best_network->dist);
-				if (new_dist < out->best_network->dist || (new_dist == out->best_network->dist && rand_u32()%32 == 0))
-				{
-					const network::node b0 = d->network[_b0];
-					const network::node b1 = d->network[_b1];
-					
-					network::edge_split(d->network, _a0, _a1, a);
-					network::edge_split(d->network, _b0, _b1, b);
-					
-					// merge 
-					d->network[a].c2 = b;
-					d->network[b].c2 = a;
-					
+				if (new_dist < out->best_network->dist) {
 					announce_and_copy(out, d, new_dist);
-					
-					// restore
-					d->network[_b0] = b0;
-					d->network[_b1] = b1;
-					d->network[_a0] = a0;
-					d->network[_a1] = a1;
+					out->equal_length.clear();
 				}
-				
+					
+				if (new_dist == out->best_network->dist)
+				{
+					//std::cout << "aaah " << newick::from_network(d, 0) << std::endl;
+					if (out->equal_length.size() < 2000)
+						out->equal_length.insert(newick::from_network(d, 0));
+				}
+					
+				// restore
+				d->network[_b0] = b0;
+				d->network[_b1] = b1;
+				d->network[_a0] = a0;
+				d->network[_a1] = a1;
+
 				/*
 				for (int i=0;i<d->allocnodes;i++)
 				{
@@ -220,7 +197,7 @@ namespace tbr
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
 		
-		character::distance_t org_dist = d->dist;
+		character::distance_t org_dist = optimize::optimize(d);
 		
 		network::data *td = network::alloc(d->matrix);
 
@@ -234,7 +211,6 @@ namespace tbr
 				// could maybe join them together the original way for the last step
 				network::copy(td, d);
 				network::idx_t s0, s1;
-				
 				bisect(td, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
 				roulette(td, s0, s1, out);
 			}
@@ -257,7 +233,6 @@ namespace tbr
 				network::idx_t upper = d->network[taxon].c0;
 				d->network[upper].c0 = d->network[upper].c1 = d->network[upper].c2 = network::NOT_IN_NETWORK;
 				d->network[taxon] = d->network[upper];
-				
 
 				//			
 				network::edgelist np;
@@ -268,7 +243,8 @@ namespace tbr
 
 					DPRINT("Re-inserting taxon " << np.pairs[j] << " " << np.pairs[j+1]);
 					network::insert(d, np.pairs[j], np.pairs[j+1], taxon);
-					optimize::optimize(d);
+					network::recompute_dist(d);
+					DPRINT("done");
 
 					if (d->dist < out->best_network->dist)
 						announce_and_copy(out, d, d->dist);
@@ -287,5 +263,3 @@ namespace tbr
 		return out->best_network->dist < org_dist;
 	}
 }
-
-
