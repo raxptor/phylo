@@ -153,9 +153,7 @@ namespace tbr
 					
 				if (new_dist == out->best_network->dist)
 				{
-					//std::cout << "aaah " << newick::from_network(d, 0) << std::endl;
-					if (out->equal_length.size() < 2000)
-						out->equal_length.insert(newick::from_network(d, 0));
+					out->equal_length.insert(newick::from_network(d, 0));
 				}
 					
 				// restore

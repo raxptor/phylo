@@ -25,18 +25,21 @@ namespace newick
 		c[2] = d->network[where].c2;
 
 		char tmp[64];
-		
-		
+				
 		subparts sp[3];
 		std::string st[3];
 		int out = 0;
+		
+		*min_tax = where;
 		
 		for (int i=0;i<3;i++)
 		{			
 			if (c[i] != from && c[i] != network::NOT_IN_NETWORK)
 			{
-				st[out] = subnet(d, c[i], where, &sp[i].min_tax, false);
+				st[out] = subnet(d, c[i], where, &sp[out].min_tax, false);
 				sp[out].data = st[out].c_str();
+				if (sp[out].min_tax < *min_tax)
+					*min_tax = sp[out].min_tax;
 				++out;
 			}
 		}
