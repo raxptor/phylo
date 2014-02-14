@@ -67,6 +67,9 @@ namespace network
 	void treeify(network::data *data, idx_t root, node *outlist, idx_t *bottomup);
 	void make_traverse_order(network::data *data, idx_t root, idx_t *bottomup, idx_t *root_htu);
 	
+	// needs to be 64*
+	void to_string(network::data *data, char *buffer, unsigned int bufsize);
+	
 	void print_characters(data *d);
 
 	void free(data *d);

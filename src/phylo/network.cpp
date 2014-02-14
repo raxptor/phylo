@@ -19,6 +19,49 @@
 	#define DPRINT(x) { }
 #endif
 
+namespace 
+{
+	// it prints negative numbers as x
+	void itoa_hex(int num, char *where)
+	{
+		static const char *hex = "0123456789abcdef";
+		if (num < 0)
+		{
+			*where++ = 'x';
+		}
+		else if (num < 0x10)
+		{
+			*where++ = hex[num];
+		}
+		else if (num < 0x100)
+		{
+			where[0] = hex[(num >> 4) & 0xf];
+			where[1] = hex[num & 0xf];
+			where += 2;
+		}
+		else if (num < 0x1000)
+		{
+			where[0] = hex[(num >> 8) & 0xf];
+			where[0] = hex[(num >> 4) & 0xf];
+			where[1] = hex[num & 0xf];
+			where += 3;
+		}
+		else if (num < 0x10000)
+		{
+			where[0] = hex[(num >> 12) & 0xf];
+			where[1] = hex[(num >> 8) & 0xf];
+			where[2] = hex[(num >> 4) & 0xf];
+			where[3] = hex[num & 0xf];
+			where += 4;
+		}
+		else
+		{
+			std::cerr << "Fix itoa_hex. " << num << " too large" << std::endl;
+		}
+		*where = 0;
+	}
+}
+
 namespace network
 {
 	data* alloc(matrix::data *mtx)
@@ -364,10 +407,42 @@ namespace network
 			bottomup[up+2] = tmpOrder[i+2];
 		}
 		bottomup[tmpOrderOut] = -1;
-	
-	
 	}
 
+	void to_string(network::data *data, char *buffer, unsigned int bufsize)
+	{
+		if (data->freecount != 0)
+		{
+			strcpy(buffer, "incomplete net");
+			return;
+		}
+		
+		char *ptr = buffer;
+		*ptr = 0;
+		for (int i=0;i<data->allocnodes;i++)
+		{
+			if (ptr - buffer > (bufsize - 32))
+			{
+				*ptr = 0;
+				std::cerr << "ERROR: Too small character buffer to to_string" << std::endl;
+				exit(-2);
+			}
+			char buf[3][32];
+			itoa_hex(data->network[i].c0, buf[0]);
+			itoa_hex(data->network[i].c1, buf[1]);
+			itoa_hex(data->network[i].c2, buf[2]);
+			strcpy(ptr, buf[0]); 
+			while (*ptr) ++ptr;
+			*ptr++ = '-';
+			strcpy(ptr, buf[1]);
+			while (*ptr) ++ptr;
+			*ptr++ = '-';
+			strcpy(ptr, buf[2]);
+			while (*ptr) ++ptr;
+			*ptr++ = '-';
+		}
+		*ptr = 0;
+	}
 	
 	void treeify(network::data *data, idx_t root, node *out, idx_t *bottomup)
 	{

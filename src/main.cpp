@@ -15,6 +15,7 @@
 #include "network.h"
 
 #include <mtw/mersenne-twister.h>
+#include <fstream>
 
 void help()
 {
