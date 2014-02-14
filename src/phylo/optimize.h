@@ -15,7 +15,7 @@ namespace optimize
 	void copy(optstate *target, optstate *source);
 	
 	// returns new distance
-	character::distance_t optimize(network::data *data, bool all_chars = false);
+	character::distance_t optimize(network::data *data, int root=0);
 }
 
 #endif

@@ -363,9 +363,9 @@ namespace optimize
 	}
 	*/
 	
-	character::distance_t optimize(network::data *data, bool all_chars)
+	character::distance_t optimize(network::data *data, int root)
 	{
 		DPRINT("[optimize] - Full optimization run.");
-		return optimize_for_tree(data->opt, data, 0);
+		return optimize_for_tree(data->opt, data, root);
 	}
 }
