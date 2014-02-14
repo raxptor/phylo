@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <cstring>
+#include <cstdlib>
 
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
