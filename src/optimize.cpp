@@ -242,18 +242,15 @@ namespace optimize
 	
 	int optimize_for_tree(optstate *st, network::data *d, int root)
 	{
-		
 		st->root = root;
-		network::treeify(d, root, st->net, st->first_pass_order);
 		
-		int rootHTU = st->net[root].c1;
-		if (rootHTU < 0)
-			rootHTU = st->net[root].c2;
-			
-		DPRINT("Root=" << root << " rootHTU=" << rootHTU);
+		int root_htu;
+		network::make_traverse_order(d, root, st->first_pass_order, &root_htu);
 
-		const int sum0 = single_character_first_pass_calc_length<ordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->ordered);
-		const int sum1 = single_character_first_pass_calc_length<unordered_scoring>(st->first_pass_order, st->maxnodes, root, rootHTU, &st->unordered);
+		DPRINT("Root=" << root << " rootHTU=" << root_htu);
+
+		const int sum0 = single_character_first_pass_calc_length<ordered_scoring>(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
+		const int sum1 = single_character_first_pass_calc_length<unordered_scoring>(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered);
 		const int sum = sum0 + sum1;
 
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);

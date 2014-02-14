@@ -297,6 +297,77 @@ namespace network
 		
 		out->count = (outptr - out->pairs);
 	}
+
+	void make_traverse_order(network::data *data, idx_t root, idx_t *bottomup, idx_t *root_htu)
+	{
+		// Assumes the root node is ate least connected to 1 htu, else it breaks
+		idx_t toexplore[MAX_NODES];
+		idx_t source[MAX_NODES];
+		node *net = data->network;
+
+		// put [root_htu], [root] on the above stack
+		source[0] = root;
+		source[1] = NOT_IN_NETWORK;
+		toexplore[1] = root;
+
+		// write root htu
+		if (net[root].c0 != NOT_IN_NETWORK)
+			toexplore[0] = *root_htu = net[root].c0;
+		else if (net[root].c1 != NOT_IN_NETWORK)
+			toexplore[0] = *root_htu = net[root].c1;
+		else 
+			toexplore[0] = *root_htu = net[root].c2;
+
+		int queue = 1;
+		int tmpOrder[1024];
+		int tmpOrderOut = 0;
+		while (queue >= 0)
+		{
+			const idx_t cur = toexplore[queue];
+			const idx_t src = source[queue];
+			--queue;
+			
+			// only HTU & root
+			if (cur >= data->mtx_taxons)
+			{
+				tmpOrder[tmpOrderOut++] = cur;
+				if (net[cur].c0 != src)
+				{
+					++queue;
+					source[queue] = cur;
+					toexplore[queue] = tmpOrder[tmpOrderOut] = net[cur].c0;
+					tmpOrderOut++;
+				}
+				if (net[cur].c1 != src)
+				{
+					++queue;
+					source[queue] = cur;
+					toexplore[queue] = tmpOrder[tmpOrderOut] = net[cur].c1;
+					tmpOrderOut++;
+				}
+				if (net[cur].c2 != src)
+				{
+					++queue;
+					source[queue] = cur;
+					toexplore[queue] = tmpOrder[tmpOrderOut] = net[cur].c2;
+					tmpOrderOut++;
+				}
+			}
+		}
+
+		// reverse it		
+		for (int i=0;i<tmpOrderOut;i+=3)
+		{
+			int up = tmpOrderOut - 3 - i;
+			bottomup[up] = tmpOrder[i];
+			bottomup[up+1] = tmpOrder[i+1];
+			bottomup[up+2] = tmpOrder[i+2];
+		}
+		bottomup[tmpOrderOut] = -1;
+	
+	
+	}
+
 	
 	void treeify(network::data *data, idx_t root, node *out, idx_t *bottomup)
 	{

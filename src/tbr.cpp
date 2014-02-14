@@ -175,6 +175,8 @@ namespace tbr
 	//
 	int run(network::data *d, output * out)
 	{
+		out->length = 0;
+		
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
 		
