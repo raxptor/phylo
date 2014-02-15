@@ -22,6 +22,8 @@ namespace optimize
 	// TBR utilitiy functions
 	void prepare_source_tree_root(network::data *d, int s0, int s1, int new_node);
 	character::distance_t clip_merge_dist(network::data *d, int source_root, int t0, int t1);
+	
+	void set_weight(optstate *st, int pos, int weight);
 }
 
 #endif

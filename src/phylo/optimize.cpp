@@ -12,7 +12,8 @@
 namespace optimize
 {
 	enum {
-		BUFSIZE  = 4096 // char group * taxa limit
+		BUFSIZE  = 64000, // char group * taxa limit
+		MAX_CHARACTERS = 2048
 	};
 	
 	typedef unsigned char st_t;
@@ -25,6 +26,7 @@ namespace optimize
 		st_t ostate[BUFSIZE];
 		st_t pstate[BUFSIZE]; 
 		st_t fstate[BUFSIZE];
+		int weights[MAX_CHARACTERS];
 	};
 	
 	struct optstate
@@ -89,9 +91,14 @@ namespace optimize
 	{
 		out->count = source->count;
 		
-		if (out->count * taxons > BUFSIZE)
+		if (source->count * maxnodes > BUFSIZE)
 		{
-			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->count * taxons << std::endl;
+			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << source->count * maxnodes << std::endl;
+			exit(-1);
+		}
+		if (source->count > MAX_CHARACTERS)
+		{
+			std::cerr << "Bump MAX_CHARACTERS in optimize.cpp to at least " << source->count << std::endl;
 			exit(-1);
 		}
 
@@ -103,7 +110,15 @@ namespace optimize
 				unsigned int dataofs = i * maxnodes + t;
 				out->ostate[dataofs] = mask(source->submatrix[mtxofs]);
 			}
+			
+			out->weights[i] = 1;
 		}
+	}
+	
+	void copy_cgroup_weights(cgroup_data *target, cgroup_data *source)
+	{
+		for (unsigned int i=0;i<source->count;i++)
+			target->weights[i] = source->weights[i];
 	}
 	
 	optstate* create(network::data *d)
@@ -303,6 +318,8 @@ namespace optimize
 			st_t *orow = &cd->ostate[maxnodes * i];
 
 			DPRINT("Frist pass from root(" << root <<") = " << (int)prow[root] << " (o:" << (int)orow[root] << ")");
+			
+			int subsum = 0;
 
 			while (bp[0] != -1)
 			{
@@ -321,7 +338,7 @@ namespace optimize
 				if (!v)
 				{
 					v = a | b;
-					++sum;
+					++subsum;
 				}
 				
 				DPRINT("writing pstate[" << n << "] [char:" << i << "] = " << v << " sum=" << sum);
@@ -332,7 +349,7 @@ namespace optimize
 			if (!rv)
 			{
 				rv = prow[root];
-				++sum;
+				++subsum;
 				DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
 			}
 			
@@ -341,6 +358,7 @@ namespace optimize
 			DPRINT("prow[rootHTU] = " << (int) prow[rootHTU] << " prow[root]=" << (int)prow[root]);
 			prow[root] = rv;
 			
+			sum += subsum * cd->weights[i];
 		}
 		
 		return sum;
@@ -361,7 +379,7 @@ namespace optimize
 				DPRINT("target tree " << t0 << "-" << t1 << " has (" << (int)F[t0] << "|" << (int)F[t1] << ")");
 				DPRINT("my computed merge is " << (int)F[target_root] << "@" << target_root);
 				if (!(F[target_root] & (F[t0] | F[t1])))
-					++sum;
+					sum += cd->weights[i];
 			}
 		}
 		else
@@ -372,7 +390,7 @@ namespace optimize
 				st_t *O = &cd->ostate[maxnodes * i];
 				st_t *F = &cd->fstate[maxnodes * i];
 				if (!(F[target_root] & O[t0]))
-					++sum;
+					sum += cd->weights[i];
 			}
 		}
 		return sum;
@@ -465,10 +483,22 @@ namespace optimize
 		return sum;
 	}
 	
+	void set_weight(optstate *st, int pos, int weight)
+	{
+		if (weight < st->unordered.count)
+		{
+			st->unordered.weights[pos] = weight;
+		}
+		else
+		{
+			std::cerr << "Weight out of range, pos=" << pos << " < " << st->unordered.count << std::endl;
+		}
+	}
 	
 	void copy(optstate *target, optstate *source)
 	{
-	
+		copy_cgroup_weights(&target->ordered, &source->ordered);
+		copy_cgroup_weights(&target->unordered, &source->unordered);
 	}
 
 	void free(optstate *s)

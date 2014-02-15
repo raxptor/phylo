@@ -18,6 +18,7 @@ namespace matrix
 		unsigned int bits;		// bits needed per value (1 per value)
 		cinfo *info;			// additional information
 		character::state_t *submatrix;  // [taxon][count] sized array
+		int *weights;
 	};
 	
 	struct data

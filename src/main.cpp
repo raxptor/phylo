@@ -120,7 +120,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 3;
+		const int num = 1;
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = smart::make(mtx);
@@ -136,15 +136,38 @@ int main(int argc, const char **argv)
 		{
 			int oc = out.equal_length.size();
 			
+			unsigned int old = out.length;
+			
 			for (int j=0;j<num;j++)
-				ratchet::run(nw[j], &out);
+			{
+				for (int k=0;k<40;k++)
+					tbr::run(nw[j], &out);
+			}
 
 			// eliminate dupes						
 			for (int i=0;i<num;i++)
 				for (int j=i+1;j<num;j++)
 					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
 						smart::make_inplace(nw[j]);
-						
+
+			if (out.length < old)
+			{
+				std::cout << "[tbr pre-ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.length << ")" << std::endl;
+				std::cout << "[tbr pre-ratchet] - here is one: " << *(out.equal_length.begin()) << std::endl;
+			}
+
+			for (int j=0;j<num;j++)
+			{
+				ratchet::run(nw[j], &out);
+			}
+
+			// eliminate dupes						
+			for (int i=0;i<num;i++)
+				for (int j=i+1;j<num;j++)
+					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
+						smart::make_inplace(nw[j]);
+					
+
 			if (oc != out.equal_length.size())
 			{
 				std::cout << "[ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.length << ")" << std::endl;

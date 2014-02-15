@@ -37,6 +37,8 @@ namespace matrix
 	{
 		delete [] d->ordered.submatrix;
 		delete [] d->unordered.submatrix;
+		delete [] d->ordered.weights;
+		delete [] d->unordered.weights;
 		delete d->_id;
 		delete d;
 	}
@@ -99,16 +101,16 @@ namespace matrix
 			
 			cgroup *tgt;
 			
-			if (used[0] && used[1] && (count == 2 || (count == 3 && used[character::UNKNOWN_CHAR_VALUE])))
-			{
+//			if (used[0] && used[1] && (count == 2 || (count == 3 && used[character::UNKNOWN_CHAR_VALUE])))
+//			{
 				tgt = &out->unordered;
 				unordered.push_back(i);
-			}
-			else
-			{
-				tgt = &out->ordered;
-				ordered.push_back(i);
-			}
+//			}
+//			else
+//			{
+//				tgt = &out->ordered;
+//				ordered.push_back(i);
+//			}
 			
 			if (bits > tgt->bits)
 				tgt->bits = bits;
@@ -119,6 +121,8 @@ namespace matrix
 
 		out->ordered.submatrix = new character::state_t[ordered.size() * out->taxons];
 		out->unordered.submatrix = new character::state_t[unordered.size() * out->taxons];
+		out->ordered.weights = new int[ordered.size()];
+		out->unordered.weights = new int[unordered.size()];
 		
 		// Rotate all characters into their matrix
 		//
@@ -130,12 +134,16 @@ namespace matrix
 		{
 			for (unsigned int j=0;j<out->taxons;j++)
 				out->ordered.submatrix[i * out->taxons + j] = mtx[j * out->characters + ordered[i]];
+				
+			out->ordered.weights[i] = 1;
 		}
 
 		for (unsigned int i=0;i<unordered.size();i++)
 		{
 			for (unsigned int j=0;j<out->taxons;j++)
 				out->unordered.submatrix[i * out->taxons + j] = mtx[j * out->characters + unordered[i]];
+				
+			out->unordered.weights[i] = 1;
 		}
 		
 		std::cout << "[matrix] - Processed " << out->characters << " characters into " << out->ordered.count << " ordered and " << out->unordered.count << " unordered, " << discarded  << " discarded." << std::endl;
@@ -174,7 +182,7 @@ namespace matrix
 			// filter out characters
 			for (int i=w1+1;i<line.size();i++)
 			{
-				if ((line[i] >= '0' && line[i] <= '9') || line[i] == '?')
+				if ((line[i] >= '0' && line[i] <= '9') || (line[i] == '?' || line[i] == '-'))
 					tmp.push_back(line[i]);
 			}
 			

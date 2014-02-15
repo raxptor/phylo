@@ -17,22 +17,24 @@ namespace ratchet
 {
 	void run(network::data *d, tbr::output *out)
 	{
-		int boosts = rand_u32() % (d->mtx_characters / 10 + 2) + 1;
+		int boosts = rand_u32() % (d->mtx_characters / 5 + 2) + 1;
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
 			picks[i] = rand_u32() % d->mtx_characters;
 
-		const int old = optimize::optimize(d);
+		const int old = out->length;
 		
 		network::data *new_net = network::alloc(d->matrix);
 		network::copy(new_net, d);
 
-/*		
-		// manipulate & recalc
-		for (int i=0;i<d->allocnodes;i++)
-			character::toggle_boost(new_net->characters[i], picks, boosts);
-*/
-
+		int nw = 10;
+		if (rand_u32()%10 > 5)
+			nw = 0;
+			
+		// manipulate
+		for (int i=0;i<boosts;i++)
+			optimize::set_weight(new_net->opt, picks[i], nw);
+		
 		// set up temporary output structure for tbr, we won't record any of these
 		// networks as final		
 
@@ -41,7 +43,7 @@ namespace ratchet
 		tout.length = 1000000;
 		network::copy(tout.best_network, new_net);
 
-		for (int i=0;i<10;i++)
+		for (int i=0;i<20;i++)
 		{
 			if (!tbr::run(new_net, &tout))
 				break;
@@ -49,28 +51,29 @@ namespace ratchet
 
 		network::copy(new_net, tout.best_network);
 		network::free(tout.best_network);
-
-/*
-		// un-do boost
-		for (int i=0;i<d->allocnodes;i++)
-			character::toggle_boost(new_net->characters[i], picks, boosts);
-*/
-			
+		
+		// restore
+		for (int i=0;i<boosts;i++)
+			optimize::set_weight(new_net->opt, picks[i], 1);
+		
 		// see if we did any better than previous best
 		const character::distance_t prestore = optimize::optimize(out->best_network);
 
 		// run again (no temp out this time)
-		for (int i=0;i<10;i++)
+		for (int i=0;i<20;i++)
 		{
 			if (!tbr::run(new_net, out))
 				break;
 				
-			if (out->length < prestore)
-			{
-				int d = optimize::optimize(new_net);
-				std::cout << "ratchet: found net (ph2) with dist " << d << " recorded(" << out->length << ") previous(" << prestore << ")" << std::endl;
-				newick::print(new_net);
-			}
+		}
+
+		if (out->length < old)
+		{
+			int d = optimize::optimize(out->best_network);
+			network::copy(new_net, out->best_network);
+			
+			std::cout << "ratchet: found net (ph2) with dist " << d << " recorded(" << out->length << ") previous(" << old << ")" << std::endl;
+			newick::print(new_net);
 		}
 
 		network::copy(d, new_net);

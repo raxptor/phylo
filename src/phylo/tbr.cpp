@@ -208,6 +208,7 @@ namespace tbr
 					if (real != newlength)
 					{
 						std::cout << "TBR found false length when copying! nl=" << newlength << " but " << real << std::endl;
+						optimize::print_state(d->opt, d->allocnodes, d->allocnodes);
 						exit(0);
 					}
 					out->equal_length.clear();
