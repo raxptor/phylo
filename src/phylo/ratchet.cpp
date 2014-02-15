@@ -16,7 +16,7 @@ namespace ratchet
 {
 	void run(network::data *d, tbr::output *out)
 	{
-		int boosts = rand_u32() % (d->mtx_characters / 5 + 2) + 1;
+		int boosts = rand_u32() % (d->mtx_characters / 8 + 2) + 1;
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
 			picks[i] = rand_u32() % d->mtx_characters;
@@ -29,10 +29,14 @@ namespace ratchet
 		int nw = 10;
 		if (rand_u32()%10 > 5)
 			nw = 0;
+		else
+			nw = rand_u32()%10;
 			
 		// manipulate
 		for (int i=0;i<boosts;i++)
+		{
 			optimize::set_weight(new_net->opt, picks[i], nw);
+		}
 		
 		// set up temporary output structure for tbr, we won't record any of these
 		// networks as final		
