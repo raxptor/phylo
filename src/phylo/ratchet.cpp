@@ -38,6 +38,7 @@ namespace ratchet
 
 		tbr::output tout;
 		tout.best_network = network::alloc(d->matrix);
+		tout.length = 1000000;
 		network::copy(tout.best_network, new_net);
 
 		for (int i=0;i<10;i++)

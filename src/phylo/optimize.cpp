@@ -346,19 +346,34 @@ namespace optimize
 		return sum;
 	}
 	
-	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int source_root, int t0, int t1)
+	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1)
 	{
-		// for all characters in this group
 		int sum = 0;
-		for (int i=0;i<cd->count;i++)
+
+		// for all characters in this group
+		if (t1 != network::NOT_IN_NETWORK)
 		{
-			// offset to the right row into the submatrix table
-			st_t *P = &cd->pstate[maxnodes * i];
-			st_t *F = &cd->fstate[maxnodes * i];
-			DPRINT("target tree " << t0 << "-" << t1 << " has (" << (int)F[t0] << "|" << (int)F[t1] << ")");
-			DPRINT("my computed merge is " << (int)F[source_root] << "@" << source_root);
-			if (!(F[source_root] & (F[t0] | F[t1])))
-				++sum;
+			for (int i=0;i<cd->count;i++)
+			{
+				// offset to the right row into the submatrix table
+				st_t *P = &cd->pstate[maxnodes * i];
+				st_t *F = &cd->fstate[maxnodes * i];
+				DPRINT("target tree " << t0 << "-" << t1 << " has (" << (int)F[t0] << "|" << (int)F[t1] << ")");
+				DPRINT("my computed merge is " << (int)F[target_root] << "@" << target_root);
+				if (!(F[target_root] & (F[t0] | F[t1])))
+					++sum;
+			}
+		}
+		else
+		{
+			for (int i=0;i<cd->count;i++)
+			{
+				// offset to the right row into the submatrix table
+				st_t *O = &cd->ostate[maxnodes * i];
+				st_t *F = &cd->fstate[maxnodes * i];
+				if (!(F[target_root] & O[t0]))
+					++sum;
+			}
 		}
 		return sum;
 	}
@@ -380,10 +395,10 @@ namespace optimize
 		prepare_source_tree_root_unordered(&d->opt->unordered, d->allocnodes, s0, s1, new_node);
 	}
 	
-	// source tree must have have been prepared on source_root with the edge to join
-	character::distance_t clip_merge_dist(network::data *d, int source_root, int t0, int t1)
+	// source tree must have have been prepared on target_root with the edge to join
+	character::distance_t clip_merge_dist(network::data *d, int target_root, int t0, int t1)
 	{
-		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, source_root, t0, t1);
+		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, target_root, t0, t1);
 	}
 
 	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false)

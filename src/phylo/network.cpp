@@ -88,7 +88,7 @@ namespace network
 	{
 		memcpy(target->network, source->network, sizeof(node) * source->allocnodes);
 		optimize::copy(target->opt, source->opt);
-		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
+		memcpy(target->freelist, source->freelist, sizeof(idx_t) * source->freecount);
 		target->freecount = source->freecount;
 	}
 

@@ -13,7 +13,7 @@ namespace tbr
 	//#define DPRINT(x) { std::cout << x << std::endl; }
 	#define DPRINT(x) { }
 	
-	#define CHECK_RESULTS
+//	#define CHECK_RESULTS
 
 	enum
 	{
@@ -27,12 +27,6 @@ namespace tbr
 		if (++networks % 1000000 == 0)
 			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
 	}
-
-	// dist overrides d->dist
-	void announce_and_copy(output *out, network::data *best, int new_dist)
-	{
-		network::copy(out->best_network, best);
-	}
 	
 	void bisect(network::data *d, network::idx_t n0, network::idx_t n1, network::idx_t *s0, network::idx_t *s1)
 	{
@@ -43,6 +37,7 @@ namespace tbr
 		if (n0 < d->mtx_taxons || n1 < d->mtx_taxons)
 		{
 			DPRINT("Ignoring single taxon for now.");
+			exit(1);
 			return;
 		}
 		
@@ -56,6 +51,7 @@ namespace tbr
 		if (outs != &out0[2])
 		{
 			DPRINT("Network is corrupted because fanout != 2 from " << n0);
+			exit(1);
 			return;
 		}
 		
@@ -66,6 +62,7 @@ namespace tbr
 		if (outs != &out1[2])
 		{
 			DPRINT("Network is corrupted because fanout != 2 from " << n1);
+			exit(1);
 			return;
 		}
 		
@@ -81,15 +78,15 @@ namespace tbr
 		*s1 = out1[0];
 	}
 	
-	void roulette(network::data *d, int org_dist, network::idx_t s0, network::idx_t s1, output *out)
+	void roulette(network::data *d, int org_dist, network::idx_t s0, network::idx_t s1, output *out, bool single_source)
 	{ 		
 		DPRINT("--- Roulette starts with networks (" << s0 << ") and (" << s1 << ")" << " ---");
 		
 		network::edgelist net0, net1;
 		network::trace_edgelist(d, s0, &net0);
-		network::trace_edgelist(d, s1, &net1);
 
 		int length0, length1;
+
 		
 		for (int i=0;i<net0.count;i++)
 		{
@@ -102,18 +99,32 @@ namespace tbr
 				break;
 			}
 		}
-
-		for (int i=0;i<net1.count;i++)
+		
+		if (!single_source)
 		{
-			if (net1.pairs[i] < d->mtx_taxons)
+			network::trace_edgelist(d, s1, &net1);
+
+			for (int i=0;i<net1.count;i++)
 			{
-				DPRINT("###### OPTIMIZING SECOND NETWORK " << net1.pairs[i]);
-				length1 = optimize::optimize(d, net1.pairs[i], true);
-				// newick::print(d, net1.pairs[i]);
-				DPRINT("length was " << length1);
-				break;
+				if (net1.pairs[i] < d->mtx_taxons)
+				{
+					DPRINT("###### OPTIMIZING SECOND NETWORK " << net1.pairs[i]);
+					length1 = optimize::optimize(d, net1.pairs[i], true);
+					// newick::print(d, net1.pairs[i]);
+					DPRINT("length was " << length1);
+					break;
+				}
 			}
 		}
+		else
+		{
+			// is taxon
+			length1 = 0;
+			net1.count = 2;
+			net1.pairs[0] = s1;
+			net1.pairs[1] = network::NOT_IN_NETWORK;
+			DPRINT("#### SOURCE IS SINGLE (" << s1 << ") LENGTH = 0");
+		}		
 		
 /*
 		DPRINT("--- Left nework --- (d=" << length0 << ")");
@@ -141,8 +152,8 @@ namespace tbr
 		const int clip_diff = org_dist - (length0 + length1);
 		DPRINT("I saved " << clip_diff << " d from the clip.");
 		
-		network::idx_t a = network::node_alloc(d);
-		network::idx_t b = network::node_alloc(d);
+		network::idx_t a = network::node_alloc(d); // store the computation there
+		network::idx_t b = !single_source ? network::node_alloc(d) : -1;
 		
 		for (int i=0;i<net0.count;i+=2)
 		{
@@ -153,62 +164,93 @@ namespace tbr
 			
 			// alright, this outer is the source tree now
 			//
+			DPRINT("Prep source tree " << _a0 << " and " << _a1 << " to " << a);
 			optimize::prepare_source_tree_root(d, _a0, _a1, a);
-			
+
 			for (int j=0;j<net1.count;j+=2)
 			{
 				const network::idx_t _b0 = net1.pairs[j];
 				const network::idx_t _b1 = net1.pairs[j+1];
-				const network::node b0 = d->network[_b0];
-				const network::node b1 = d->network[_b1];
 			
+				// At this point _b1 can potentially be -1 (NOT_IN_NETWORK)
 				DPRINT("Gluing together " << _a0 << "-" << _a1 << " with " << _b0 << "-" << _b1 <<  " tmp nodes " << a << " and " << b);
 				
 				// 
 				const int mergediff = optimize::clip_merge_dist(d, a, _b0, _b1);
 				const int newlength = (length0 + length1 + mergediff);
 				
+				DPRINT("merge diff = " << mergediff << " newlength = " << newlength << " prevlength=" << out->length);
+				
 				if (newlength < out->length)
 				{
 					out->length = newlength;
-					
 					network::data *target = out->best_network;
 					network::copy(target, d);
-					network::edge_split(target->network, _a0, _a1, a);
-					network::edge_split(target->network, _b0, _b1, b);
-					target->network[a].c2 = b;
-					target->network[b].c2 = a;
 					
-					if (optimize::optimize(target) != newlength)
+					if (!single_source)
 					{
-						std::cout << "TBR found false length when copying! nl=" << newlength << std::endl;
-						exit(0);
+						network::edge_split(target->network, _a0, _a1, a);
+						network::edge_split(target->network, _b0, _b1, b);
+						target->network[a].c2 = b;
+						target->network[b].c2 = a;
+					}
+					else
+					{
+						// we copy the allocated tmp vertex now which will be needed for the insert
+						// so free that one back
+						network::node_free(target, a);
+						// taxon rejoined
+						DPRINT("inserting " << _b0 << " to " << _a0 << " " << _a1 << " tot " << target->allocnodes);
+						network::insert(target, _a0, _a1, _b0);
 					}
 					
+					int real = optimize::optimize(target);
+					if (real != newlength)
+					{
+						std::cout << "TBR found false length when copying! nl=" << newlength << " but " << real << std::endl;
+						exit(0);
+					}
 					out->equal_length.clear();
 					out->equal_length.insert(newick::from_network(target, 0));
 				}
 				else if (newlength == out->length)
 				{
 					// tmp construct to make string	
-					const network::node a0 = d->network[_a0];
-					const network::node a1 = d->network[_a1];
+					const network::node b0 = d->network[_b0];
+					const network::node b1 = d->network[_b1 >= 0 ? _b1 : 0];
+
 					network::edge_split(d->network, _a0, _a1, a);
-					network::edge_split(d->network, _b0, _b1, b);
-					d->network[a].c2 = b;
-					d->network[b].c2 = a;
+					
+					if (!single_source)
+					{
+						network::edge_split(d->network, _b0, _b1, b);
+						d->network[a].c2 = b;
+						d->network[b].c2 = a;
+					}
+					else
+					{
+						d->network[a].c2 = _b0;
+					}
 					
 					unsigned int i = out->equal_length.size();
 					out->equal_length.insert(newick::from_network(d, 0));
 					
+					if (rand_u32()%10==0)
+						network::copy(out->best_network, d);
+
 					d->network[_b0] = b0;
-					d->network[_b1] = b1;
+					
+					if (!single_source)
+						d->network[_b1] = b1;
+					
 					d->network[_a0] = a0;
 					d->network[_a1] = a1;
 				}
 				
 				#if defined(CHECK_RESULTS)
 
+				if (!single_source)
+				{
 					// verify	
 					network::data *tmp = network::alloc(d->matrix);
 					network::copy(tmp, d);
@@ -231,14 +273,17 @@ namespace tbr
 					} 
 					
 					network::free(tmp);
+				}
 				#endif
 
 				count_networks();
 			}
 		}
 		
-		network::node_free(d, a);
-		network::node_free(d, b);
+		if (a != -1)
+			network::node_free(d, a);
+		if (b != -1)
+			network::node_free(d, b);
 	}
 
 	//
@@ -248,10 +293,10 @@ namespace tbr
 		network::trace_edgelist(d, 0, &tmp);
 		character::distance_t org_dist = optimize::optimize(d);
 
-		network::data *bisected = network::alloc(d->matrix);
-
 		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << org_dist);
 		
+		network::data *bisected = network::alloc(d->matrix);
+
 		for (int i=0;i<tmp.count;i+=2)
 		{
 			if (tmp.pairs[i] >= d->mtx_taxons && tmp.pairs[i+1] >= d->mtx_taxons)
@@ -262,13 +307,11 @@ namespace tbr
 				network::idx_t s0, s1;
 				
 				bisect(bisected, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
-				roulette(bisected, org_dist, s0, s1, out);
-				break;
+				roulette(bisected, org_dist, s0, s1, out, false);
 			}
-			/*
 			else
 			{
-				continue;
+				network::copy(bisected, d);
 				network::idx_t taxon = tmp.pairs[i];
 				network::idx_t inner = tmp.pairs[i+1];
 				if (taxon >= d->mtx_taxons)
@@ -277,43 +320,17 @@ namespace tbr
 					inner = tmp.pairs[i];
 				}
 			
-				// remember where it goes and insert it.				
+				// remember where it goes and insert it.
 				network::idx_t r0, r1;
-				network::the_two_others(d->network, inner, taxon, &r0, &r1);				
-				network::disconnect(d, taxon);
-
-				// cleanup to not find any junk edges
-				network::idx_t upper = d->network[taxon].c0;
-				d->network[upper].c0 = d->network[upper].c1 = d->network[upper].c2 = network::NOT_IN_NETWORK;
-				d->network[taxon] = d->network[upper];
-
-				//			
-				network::edgelist np;
-				network::trace_edgelist(d, (taxon+1) % d->mtx_taxons, &np);
-				for (int j=0;j<np.count;j+=2)
-				{
-					// this is junk from having not filled in the last nodes
-
-					DPRINT("Re-inserting taxon " << np.pairs[j] << " " << np.pairs[j+1]);
-					network::insert(d, np.pairs[j], np.pairs[j+1], taxon);
-					network::recompute_dist(d);
-					DPRINT("done");
-
-					if (d->dist < out->best_network->dist)
-						announce_and_copy(out, d, d->dist);
-					
-					network::disconnect(d, taxon);
-					count_networks();
-				}
+				network::the_two_others(bisected->network, inner, taxon, &r0, &r1);				
+				DPRINT("i am (" << taxon << ") others are " << r0 << "," << r1);
 				
-				network::insert(d, r0, r1, taxon);
+				network::disconnect(bisected, taxon);
+				roulette(bisected, org_dist, r0, taxon, out, true);
 			}
-			*/
 		}
 		
-		network::copy(d, out->best_network);
 		network::free(bisected);
-		
 		return out->length < org_dist;
 	}
 }
