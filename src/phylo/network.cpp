@@ -74,7 +74,6 @@ namespace network
 		d->network = new node[d->allocnodes];
 
 		// free list
-		d->dist = 0;
 		d->freecount = d->allocnodes - mtx->taxons;
 		d->freelist = new idx_t[d->freecount];
 		for (unsigned int i=0;i<d->freecount;i++)
@@ -91,20 +90,6 @@ namespace network
 		optimize::copy(target->opt, source->opt);
 		memcpy(target->freelist, source->freelist, sizeof(idx_t) * target->freecount);
 		target->freecount = source->freecount;
-		target->dist = source->dist;
-	}
-		
-	void recompute_dist(data *target)
-	{
-		target->dist = optimize::optimize(target);
-
-#if defined(NETWORK_CHECKS)
-		if (distance_by_edges(target) != target->dist)
-		{
-			std::cerr << "optimize::optimize() and tdist produced different results!" << std::endl;
-			exit(-1);
-		}
-#endif
 	}
 
 	void free(data *d)
@@ -188,10 +173,6 @@ namespace network
 	{
 		DPRINT(" Insert " << which << " at " << n0 << "-" << n1);
 
-#if defined(NETWORK_CHECKS)		
-		int old = d->dist;
-#endif
-		
 		node * const net = d->network;
 		
 		const idx_t n = node_alloc(d);
@@ -215,15 +196,6 @@ namespace network
 			// must have all the remaining connection at c1, c2
 			net[which].c0 = n;
 		}
-
-		DPRINT("     => d = " << d->dist << " new=" << n);
-
-#if defined(NETWORK_CHECKS)		
-		if (d->dist < old)
-			std::cout << "Inserting made it lower " << std::endl;
-
-		check(d);
-#endif
 
 		return n;
 	}
@@ -263,8 +235,6 @@ namespace network
 		
 		DPRINT(" -> merging from " << r0 << "-" << r1 << " with " << n << " in the middle");
 		edge_merge(d->network, r0, r1, n);
-
-		DPRINT("   d => " << d->dist);	
 
 		// which must a terminal node
 		node_free(d, n);
@@ -411,11 +381,12 @@ namespace network
 
 	void to_string(network::data *data, char *buffer, unsigned int bufsize)
 	{
+		/*
 		if (data->freecount != 0)
 		{
 			strcpy(buffer, "incomplete net");
 			return;
-		}
+		}*/
 		
 		char *ptr = buffer;
 		*ptr = 0;
@@ -439,7 +410,7 @@ namespace network
 			*ptr++ = '-';
 			strcpy(ptr, buf[2]);
 			while (*ptr) ++ptr;
-			*ptr++ = '-';
+			*ptr++ = '|';
 		}
 		*ptr = 0;
 	}

@@ -30,15 +30,16 @@ namespace bruteforce
 	{
 		if (which == _network->mtx_taxons)
 		{	
-			if (_network->dist < _best_distance)
+			unsigned int d = optimize::optimize(_network);
+			if (d < _best_distance)
 			{
-				std::cout << " -> Best new distance " << _network->dist << std::endl;
+				std::cout << " -> Best new distance " << d << std::endl;
 				_best_network.clear();
-				_best_distance = _network->dist;
+				_best_distance = d;
 				newick::print(_network);
 			}
 		
-			if (_network->dist == _best_distance)
+			if (d == _best_distance)
 				_best_network.insert(newick::from_network(_network, 0));
 			
 			if ((_visited++ % 10000000 == 0) && _visited > 1)
@@ -66,8 +67,8 @@ namespace bruteforce
 			_edges.push_back(e1);
 			_edges.push_back(e2);
 			
-			network::recompute_dist(_network);
-			if (_network->dist <= _best_distance)
+			unsigned int dist = optimize::optimize(_network);
+			if (dist <= _best_distance)
 				next_taxon(which+1);
 			
 			_edges.pop_back();
@@ -94,7 +95,8 @@ namespace bruteforce
 		for (int i=0;i<16;i++)
 		{
 			dumb::make_inplace(_network);
-			if (i == 0 || _network->dist < _best_distance)
+			unsigned int dist = optimize::optimize(_network);
+			if (i == 0 || dist < _best_distance)
 			{
 				_best_network.clear();
 				_best_network.insert(newick::from_network(_network, 0));

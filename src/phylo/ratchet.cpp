@@ -46,6 +46,7 @@ namespace ratchet
 				break;
 		}
 
+		network::copy(new_net, tout.best_network);
 		network::free(tout.best_network);
 
 /*
@@ -54,8 +55,6 @@ namespace ratchet
 			character::toggle_boost(new_net->characters[i], picks, boosts);
 */
 			
-		network::recompute_dist(new_net);	
-
 		// see if we did any better than previous best
 		const character::distance_t prestore = optimize::optimize(out->best_network);
 
@@ -65,15 +64,11 @@ namespace ratchet
 			if (!tbr::run(new_net, out))
 				break;
 				
-			network::recompute_dist(new_net);	
-			if (new_net->dist < prestore)
+			if (out->length < prestore)
 			{
-				int d = new_net->dist;
-				new_net->dist = optimize::optimize(new_net);
-				std::cout << "ratchet: found net (ph2) with dist " << d << " actual(" << new_net->dist << ") previous(" << prestore << ")" << std::endl;
+				int d = optimize::optimize(new_net);
+				std::cout << "ratchet: found net (ph2) with dist " << d << " recorded(" << out->length << ") previous(" << prestore << ")" << std::endl;
 				newick::print(new_net);
-				network::copy(out->best_network, new_net);
-				out->equal_length.clear();
 			}
 		}
 

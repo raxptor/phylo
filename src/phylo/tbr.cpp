@@ -12,6 +12,8 @@ namespace tbr
 {	
 	//#define DPRINT(x) { std::cout << x << std::endl; }
 	#define DPRINT(x) { }
+	
+	#define CHECK_RESULTS
 
 	enum
 	{
@@ -30,12 +32,6 @@ namespace tbr
 	void announce_and_copy(output *out, network::data *best, int new_dist)
 	{
 		network::copy(out->best_network, best);
-		network::recompute_dist(out->best_network);
-		if (out->best_network->dist != new_dist)
-		{
-			std::cerr << "err: tbr produced false distance (" << new_dist <<") but (" << out->best_network->dist << ")" << std::endl;
-			exit(-2);
-		}
 	}
 	
 	void bisect(network::data *d, network::idx_t n0, network::idx_t n1, network::idx_t *s0, network::idx_t *s1)
@@ -76,6 +72,8 @@ namespace tbr
 		network::edge_merge(d->network, out0[0], out0[1], n0);
 		network::edge_merge(d->network, out1[0], out1[1], n1);
 
+		DPRINT("Merge freed up " << n0 << " and " << n1);
+
 		network::node_free(d, n0);
 		network::node_free(d, n1);
 		
@@ -83,14 +81,42 @@ namespace tbr
 		*s1 = out1[0];
 	}
 	
-	void roulette(network::data *d, network::idx_t s0, network::idx_t s1, output *out)
+	void roulette(network::data *d, int org_dist, network::idx_t s0, network::idx_t s1, output *out)
 	{ 		
 		DPRINT("--- Roulette starts with networks (" << s0 << ") and (" << s1 << ")" << " ---");
+		
 		network::edgelist net0, net1;
 		network::trace_edgelist(d, s0, &net0);
+		network::trace_edgelist(d, s1, &net1);
 
-		/*
-		DPRINT("--- Left nework ----");
+		int length0, length1;
+		
+		for (int i=0;i<net0.count;i++)
+		{
+			if (net0.pairs[i] < d->mtx_taxons)
+			{
+				DPRINT("###### OPTIMIZING FIRST NETWORK " << net0.pairs[i]);
+				length0 = optimize::optimize(d, net0.pairs[i], true);
+				// newick::print(d, net0.pairs[i]);
+				DPRINT(" length was " << length0);
+				break;
+			}
+		}
+
+		for (int i=0;i<net1.count;i++)
+		{
+			if (net1.pairs[i] < d->mtx_taxons)
+			{
+				DPRINT("###### OPTIMIZING SECOND NETWORK " << net1.pairs[i]);
+				length1 = optimize::optimize(d, net1.pairs[i], true);
+				// newick::print(d, net1.pairs[i]);
+				DPRINT("length was " << length1);
+				break;
+			}
+		}
+		
+/*
+		DPRINT("--- Left nework --- (d=" << length0 << ")");
 		for (int i=0;i<net0.count;i++)
 		{
 			if (net0.pairs[i] < d->mtx_taxons)
@@ -99,11 +125,8 @@ namespace tbr
 				break;
 			}
 		}
-		*/
-		network::trace_edgelist(d, s1, &net1);
 		
-		/*
-		DPRINT("--- Right nework ----");
+		DPRINT("--- Right nework --- (d=" << length1 << ")");
 		for (int i=0;i<net1.count;i++)
 		{
 			if (net1.pairs[i] < d->mtx_taxons)
@@ -112,7 +135,12 @@ namespace tbr
 				break;
 			}
 		}
-		*/
+*/
+		
+		// diff between original tree and the sum of clipped.
+		const int clip_diff = org_dist - (length0 + length1);
+		DPRINT("I saved " << clip_diff << " d from the clip.");
+		
 		network::idx_t a = network::node_alloc(d);
 		network::idx_t b = network::node_alloc(d);
 		
@@ -123,66 +151,106 @@ namespace tbr
 			const network::node a0 = d->network[_a0];
 			const network::node a1 = d->network[_a1];
 			
+			// alright, this outer is the source tree now
+			//
+			optimize::prepare_source_tree_root(d, _a0, _a1, a);
+			
 			for (int j=0;j<net1.count;j+=2)
 			{
 				const network::idx_t _b0 = net1.pairs[j];
 				const network::idx_t _b1 = net1.pairs[j+1];
-			
-				DPRINT("Gluing together " << _a0 << "-" << _a1 << " with " << _b0 << "-" << _b1);
-				
-				// -----------------------------------------------------------
-				// TODO: Calculating this four-way thing should be easy to do
-				
 				const network::node b0 = d->network[_b0];
 				const network::node b1 = d->network[_b1];
+			
+				DPRINT("Gluing together " << _a0 << "-" << _a1 << " with " << _b0 << "-" << _b1 <<  " tmp nodes " << a << " and " << b);
 				
-				network::edge_split(d->network, _a0, _a1, a);
-				network::edge_split(d->network, _b0, _b1, b);
-
-				// merge 
-				d->network[a].c2 = b;
-				d->network[b].c2 = a;
+				// 
+				const int mergediff = optimize::clip_merge_dist(d, a, _b0, _b1);
+				const int newlength = (length0 + length1 + mergediff);
 				
-				character::distance_t new_dist = optimize::optimize(d, true);
-				
-				// actually construct it
-				if (new_dist < out->best_network->dist) {
-					announce_and_copy(out, d, new_dist);
-					out->equal_length.clear();
-				}
-					
-				if (new_dist == out->best_network->dist)
+				if (newlength < out->length)
 				{
-					out->equal_length.insert(newick::from_network(d, 0));
-				}
+					out->length = newlength;
 					
-				// restore
-				d->network[_b0] = b0;
-				d->network[_b1] = b1;
-				d->network[_a0] = a0;
-				d->network[_a1] = a1;
+					network::data *target = out->best_network;
+					network::copy(target, d);
+					network::edge_split(target->network, _a0, _a1, a);
+					network::edge_split(target->network, _b0, _b1, b);
+					target->network[a].c2 = b;
+					target->network[b].c2 = a;
+					
+					if (optimize::optimize(target) != newlength)
+					{
+						std::cout << "TBR found false length when copying! nl=" << newlength << std::endl;
+						exit(0);
+					}
+					
+					out->equal_length.clear();
+					out->equal_length.insert(newick::from_network(target, 0));
+				}
+				else if (newlength == out->length)
+				{
+					// tmp construct to make string	
+					const network::node a0 = d->network[_a0];
+					const network::node a1 = d->network[_a1];
+					network::edge_split(d->network, _a0, _a1, a);
+					network::edge_split(d->network, _b0, _b1, b);
+					d->network[a].c2 = b;
+					d->network[b].c2 = a;
+					
+					unsigned int i = out->equal_length.size();
+					out->equal_length.insert(newick::from_network(d, 0));
+					
+					d->network[_b0] = b0;
+					d->network[_b1] = b1;
+					d->network[_a0] = a0;
+					d->network[_a1] = a1;
+				}
+				
+				#if defined(CHECK_RESULTS)
+
+					// verify	
+					network::data *tmp = network::alloc(d->matrix);
+					network::copy(tmp, d);
+					network::edge_split(tmp->network, _a0, _a1, a);
+					network::edge_split(tmp->network, _b0, _b1, b);
+					tmp->network[a].c2 = b;
+					tmp->network[b].c2 = a;
+
+					const int actual = optimize::optimize(tmp);
+
+					DPRINT(" => This would result in " << mergediff << " extra L0 & L1 =" << length0 << " " << length1);
+					DPRINT(" => Computed length = " << (length0 + length1 + mergediff));
+					DPRINT(" => Actual length = " << actual);
+
+					if (actual != newlength)
+					{
+						optimize::print_state(d->opt, d->allocnodes, d->allocnodes);
+						std::cerr << "Optimize computed wrong merge length, " << newlength << " vs " << actual << std::endl;
+						exit(-2);
+					} 
+					
+					network::free(tmp);
+				#endif
 
 				count_networks();
 			}
 		}
 		
 		network::node_free(d, a);
-		network::node_free(d, b);		
+		network::node_free(d, b);
 	}
 
 	//
 	int run(network::data *d, output * out)
 	{
-		out->length = 0;
-		
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
-		
 		character::distance_t org_dist = optimize::optimize(d);
-		
-		network::data *td = network::alloc(d->matrix);
 
-		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << d->dist << " " << out->best_network->dist);
+		network::data *bisected = network::alloc(d->matrix);
+
+		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << org_dist);
 		
 		for (int i=0;i<tmp.count;i+=2)
 		{
@@ -190,13 +258,17 @@ namespace tbr
 			{
 				// lets work on a temp copy since bisecting and rouletting leaves it bisected.
 				// could maybe join them together the original way for the last step
-				network::copy(td, d);
+				network::copy(bisected, d);
 				network::idx_t s0, s1;
-				bisect(td, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
-				roulette(td, s0, s1, out);
+				
+				bisect(bisected, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
+				roulette(bisected, org_dist, s0, s1, out);
+				break;
 			}
+			/*
 			else
 			{
+				continue;
 				network::idx_t taxon = tmp.pairs[i];
 				network::idx_t inner = tmp.pairs[i+1];
 				if (taxon >= d->mtx_taxons)
@@ -236,11 +308,12 @@ namespace tbr
 				
 				network::insert(d, r0, r1, taxon);
 			}
+			*/
 		}
 		
 		network::copy(d, out->best_network);
-		network::free(td);
+		network::free(bisected);
 		
-		return out->best_network->dist < org_dist;
+		return out->length < org_dist;
 	}
 }

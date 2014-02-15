@@ -32,7 +32,6 @@ namespace network
 		node *network;
 		optimize::optstate *opt;
 		int mtx_taxons, mtx_characters;
-		int dist;
 		int freecount;
 		idx_t *freelist;
 
@@ -43,8 +42,6 @@ namespace network
 	
 	data* alloc(matrix::data *mtx);
 	void copy(data *target, data *source);
-	
-	void recompute_dist(data *target);
 
 	// might not be optibal distance
 	int distance_by_edges(data *target);

@@ -1,7 +1,7 @@
 dragon     111000000
 dinosaur   110000000
 ranardath  000111000
-rax        010110???
+rax        010110000
 pizza      000111111
 hamburger  011001111
 avocado    111110111

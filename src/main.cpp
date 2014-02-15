@@ -128,9 +128,9 @@ int main(int argc, const char **argv)
 		tbr::output out;
 		out.best_network = network::alloc(mtx);
 		network::copy(out.best_network, nw[0]);
-		network::recompute_dist(out.best_network);
+		out.length = optimize::optimize(out.best_network);
 		
-		std::cout << "Starting ratchet with random tree dist=" << out.best_network->dist << std::endl;
+		std::cout << "Starting ratchet with random tree dist=" << out.length << std::endl;
 
 		for (int i=0;i<1000;i++)
 		{
@@ -147,14 +147,18 @@ int main(int argc, const char **argv)
 						
 			if (oc != out.equal_length.size())
 			{
-				std::cout << "[ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.best_network->dist << ")" << std::endl;
+				std::cout << "[ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.length << ")" << std::endl;
 			}
 		}
 
 		std::cout << std::endl;
-		std::cout << "Done. Best network (" << out.best_network->dist << ") actual (" << optimize::optimize(out.best_network) << " ==> ";
-		newick::print(out.best_network);
-		network::print_characters(out.best_network);
+		std::cout << "Done. I have " << out.equal_length.size() << " networks of length " << out.length << std::endl;
+		
+		std::set<std::string>::iterator i = out.equal_length.begin();
+		
+		int max = 200;
+		while (i != out.equal_length.end() && --max > 0)
+			std::cout << (*i++) << std::endl;
 	}
 	
 	matrix::free(mtx);	

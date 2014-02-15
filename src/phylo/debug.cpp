@@ -7,6 +7,7 @@ namespace debug
 {
 	void mk_backtrack(network::data *d)
 	{
+		/*
 		network::data *d2 = network::alloc(d->matrix);
 		network::copy(d2, d);
 		std::cout << "logentry addlog[] = {" << std::endl;
@@ -19,6 +20,7 @@ namespace debug
 		}	
 		std::cout << "};" << std::endl;
 		network::free(d2);
+		*/
 	}
 }
 
