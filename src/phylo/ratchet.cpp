@@ -4,7 +4,6 @@
 #include "network.h"
 #include "newick.h"
 #include "tbr.h"
-#include "debug.h"
 #include "optimize.h"
 
 #include <cstdlib>

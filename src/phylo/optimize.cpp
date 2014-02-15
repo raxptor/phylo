@@ -222,10 +222,6 @@ namespace optimize
 			taxp[0] = root;
 			taxp[1] = node[0];
 			
-			// this is a network of just 2
-//			if (node[0] < taxons)
-//				queue = -1;
-			
 			while (queue >= 0)
 			{
 				const int me = node[queue];

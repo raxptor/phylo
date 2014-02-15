@@ -7,7 +7,6 @@
 #include "matrix.h"
 #include "dumb.h"
 #include "smart.h"
-#include "tree.h"
 #include "bruteforce.h"
 #include "newick.h"
 #include "tbr.h"

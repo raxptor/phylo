@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "network.h"
-#include "tree.h"
 
 namespace newick
 {
@@ -84,18 +83,8 @@ namespace newick
 		return std::string("(") + subnet(d, root, network::NOT_IN_NETWORK, &tmp, true) + ");";
 	}
 
-	std::string from_tree(tree::data *d)
-	{
-		return "not supported";
-	}
-
 	void print(network::data *d, int root)
 	{
 		std::cout << from_network(d, root) << std::endl;
-	}
-
-	void print(tree::data *d)
-	{
-		std::cout << "Newick (tree): " << from_tree(d) << std::endl;
 	}
 }
