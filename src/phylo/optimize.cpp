@@ -511,8 +511,8 @@ namespace optimize
 			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
-			const __m128i vk0 = _mm_set1_epi8(0);       // constant vector of all 0s for use with _mm_unpacklo_epi8/_mm_unpackhi_epi8
-			const __m128i vk1 = _mm_set1_epi16(1);      // constant vector of all 1s for use with _mm_madd_epi16
+			const __m128i vk0 = _mm_set1_epi8(0);
+			const __m128i vk1 = _mm_set1_epi16(1);   
 
 			for (int i=0;i<cd->packunits;i++)
 			{
@@ -564,8 +564,8 @@ namespace optimize
 			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
-			const __m128i vk0 = _mm_set1_epi8(0);       // constant vector of all 0s for use with _mm_unpacklo_epi8/_mm_unpackhi_epi8
-			const __m128i vk1 = _mm_set1_epi16(1);      // constant vector of all 1s for use with _mm_madd_epi16
+			const __m128i vk0 = _mm_set1_epi8(0);       
+			const __m128i vk1 = _mm_set1_epi16(1); 
 
 			for (int i=0;i<cd->packunits;i++)
 			{

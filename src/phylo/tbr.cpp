@@ -16,7 +16,7 @@ namespace tbr
 	// This will recompute the results	
 	//
 	// #define CHECK_RESULTS
-	// #define CHECK_ALL_BEST
+	//#define CHECK_ALL_BEST
 
 	enum
 	{
