@@ -48,8 +48,11 @@ namespace ratchet
 
 		for (int i=0;i<20;i++)
 		{
-			if (!tbr::run(new_net, &tout))
+			if (tbr::run(new_net, &tout))
+				network::copy(new_net, tout.best_network);
+			else
 				break;
+				
 		}
 
 		network::copy(new_net, tout.best_network);
@@ -65,16 +68,15 @@ namespace ratchet
 		// run again (no temp out this time)
 		for (int i=0;i<20;i++)
 		{
-			if (!tbr::run(new_net, out))
+			if (tbr::run(new_net, out))
+				network::copy(new_net, out->best_network);
+			else
 				break;
 		}
 
-		network::copy(new_net, out->best_network);
-		
 		if (out->length < old)
 		{
 			int d = optimize::optimize(out->best_network);
-			
 			std::cout << "ratchet: found net (ph2) with dist " << d << " recorded(" << out->length << ") previous(" << old << ")" << std::endl;
 			newick::print(new_net);
 		}

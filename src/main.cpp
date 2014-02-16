@@ -139,7 +139,16 @@ int main(int argc, const char **argv)
 			for (int j=0;j<num;j++)
 			{
 				for (int k=0;k<40;k++)
-					tbr::run(nw[j], &out);
+				{
+					if (tbr::run(nw[j], &out))
+					{
+						network::copy(nw[j], out.best_network);
+					}
+					else
+					{
+						break;
+					}
+				}
 			}
 
 			// eliminate dupes						

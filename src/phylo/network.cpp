@@ -324,8 +324,6 @@ namespace network
 
 		// put [root_htu], [root] on the above stack
 		source[0] = root;
-		source[1] = NOT_IN_NETWORK;
-		toexplore[1] = root;
 
 		// write root htu
 		if (net[root].c0 != NOT_IN_NETWORK)
@@ -334,8 +332,8 @@ namespace network
 			toexplore[0] = *root_htu = net[root].c1;
 		else 
 			toexplore[0] = *root_htu = net[root].c2;
-
-		int queue = 1;
+		
+		int queue = 0;
 		int tmpOrder[1024];
 		int tmpOrderOut = 0;
 		while (queue >= 0)
@@ -513,7 +511,6 @@ namespace network
 		
 		int tmpOrder[1024];
 		int tmpOrderOut = 0;
-		
 		while (queue >= 0)
 		{
 			const idx_t cur = toexplore[queue];

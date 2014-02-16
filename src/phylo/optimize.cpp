@@ -158,8 +158,10 @@ namespace optimize
 		}
 	}
 	
-	void copy_cgroup_weights(cgroup_data *target, cgroup_data *source)
+	void copy_cgroup(cgroup_data *target, cgroup_data *source)
 	{
+		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
+		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
 		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
 			target->weights[i] = source->weights[i];
 	}
@@ -719,8 +721,8 @@ namespace optimize
 
 	void copy(optstate *target, optstate *source)
 	{
-		copy_cgroup_weights(&target->ordered, &source->ordered);
-		copy_cgroup_weights(&target->unordered, &source->unordered);
+		copy_cgroup(&target->ordered, &source->ordered);
+		copy_cgroup(&target->unordered, &source->unordered);
 	}
 
 }
