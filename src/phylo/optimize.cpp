@@ -156,28 +156,6 @@ namespace optimize
 			for (int p=0;p<out->count;p++)
 				out->weights[i*BLOCKSIZE+p] = 1;
 		}
-		/*
-
-		for (unsigned int t=0;t<taxons;t++)
-		{
-			for (unsigned int i=0;i<out->count;i++)
-			{
-				std::cout << (int)source->submatrix[i * taxons + t] << " ";
-			}
-			std::cout << std::endl;				
-		}
-		std::cout << std::endl;		
-		for (unsigned int t=0;t<taxons;t++)
-		{
-			for (unsigned int i=0;i<out->packunits;i++)
-			{
-				for (unsigned int p=0;p<BLOCKSIZE;p++)
-					std::cout << (int)is_single[out->ostate[i * out->memwidth + BLOCKSIZE * t + p]] << " ";
-
-			}
-			std::cout << std::endl;				
-		}
-		*/
 	}
 	
 	void copy_cgroup_weights(cgroup_data *target, cgroup_data *source)
