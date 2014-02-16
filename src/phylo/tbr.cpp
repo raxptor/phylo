@@ -12,8 +12,11 @@ namespace tbr
 {	
 	//#define DPRINT(x) { std::cout << x << std::endl; }
 	#define DPRINT(x) { }
-	
-	//#define CHECK_RESULTS
+
+	// This will recompute the results	
+	//
+	// #define CHECK_RESULTS
+	// #define CHECK_ALL_BEST
 
 	enum
 	{
@@ -149,13 +152,8 @@ namespace tbr
 */
 		
 		// diff between original tree and the sum of clipped.
-		const int clip_diff = org_dist - (length0 + length1);
-		DPRINT("I saved " << clip_diff << " d from the clip.");
-		
 		network::idx_t a = network::node_alloc(d); // store the computation there
 		network::idx_t b = !single_source ? network::node_alloc(d) : -1;
-		
-
 
 		for (int i=0;i<net0.count;i+=2)
 		{
@@ -210,6 +208,7 @@ namespace tbr
 						network::insert(target, _a0, _a1, _b0);
 					}
 					
+					#if defined(CHECK_ALL_BEST) || defined(CHECK_RESULTS)
 					int real = optimize::optimize(target);
 					if (real != newlength)
 					{
@@ -217,6 +216,7 @@ namespace tbr
 						optimize::print_state(d->opt, d->allocnodes, d->allocnodes);
 						exit(0);
 					}
+					#endif
 					
 					network::sort(target);
 					char *outbuf = treebuf;
@@ -254,7 +254,6 @@ namespace tbr
 					
 					DPRINT("sorted is " << treebuf);
 					
-					unsigned int i = out->equal_length.size();
 					out->equal_length.insert(treebuf);
 					
 					if (rand_u32()%3==0)

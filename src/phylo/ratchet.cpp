@@ -60,7 +60,7 @@ namespace ratchet
 			optimize::set_weight(new_net->opt, picks[i], 1);
 		
 		// see if we did any better than previous best
-		const character::distance_t prestore = optimize::optimize(out->best_network);
+		// const character::distance_t prestore = optimize::optimize(out->best_network);
 
 		// run again (no temp out this time)
 		for (int i=0;i<20;i++)

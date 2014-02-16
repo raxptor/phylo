@@ -113,7 +113,6 @@ int main(int argc, const char **argv)
 		output.best_network = network::alloc(mtx);
 		network::copy(output.best_network, tmp);
 		
-		const int res = tbr::run(tmp, &output);
 		std::cout << "One round of tbr produced " << output.equal_length.size() << " trees of equal length (" << output.length << ")" << std::endl;
 	}
 

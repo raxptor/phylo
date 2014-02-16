@@ -33,10 +33,10 @@ namespace optimize
 		int count;
 		int packunits;
 		int memwidth;
-		st_t ostate[BUFSIZE];
-		st_t pstate[BUFSIZE]; 
-		st_t fstate[BUFSIZE];
-		st_t weights[MAX_CHARACTERS];
+		st_t ostate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
+		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
+		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
+		st_t weights[MAX_CHARACTERS] __attribute__ ((aligned(BLOCKSIZE)));
 	};
 	
 	struct optstate
@@ -298,8 +298,6 @@ namespace optimize
 			DPRINT(" character(" << i << "), root=" << root << " fin_ancestor=" << (int)P[root]);
 			DPRINT(" first node=" << node[0]);
 			
-			int root_htu = node[0];
-			
 			int taxp[1024];
 			int taxp_count = 2; 
 			taxp[0] = root;
@@ -397,46 +395,102 @@ namespace optimize
 			
 			// offset to the right row into the submatrix table
 			st_t *prow = &cd->pstate[cd->memwidth * i];
-			st_t *orow = &cd->ostate[cd->memwidth * i];
 			
-			int subsum[BLOCKSIZE] = {0};
+			#if defined(USE_SIMD)
+			
+				__m128i grandtot = _mm_setzero_si128();
+				__m128i zero = _mm_setzero_si128();
+				__m128i cmp = _mm_setzero_si128();
 
-			while (bp[0] != -1)
-			{
-				const int n  = bp[0];
-				const int c1 = bp[1];
-				const int c2 = bp[2];
+				int n = bp[0];
+				int c1 = bp[1];
+				int c2 = bp[2];
+								
+				while (n != -1)
+				{
+					__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
+					__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
+					
+					c1 = bp[3+1];
+					c2 = bp[3+2];
+					const int resaddr = n*BLOCKSIZE;
+					
+					// interleaved here, cmp starts out at z for the first round
+					// and one extra at exit
+					grandtot = _mm_add_epi8(grandtot, cmp);
+				
+					__m128i v = _mm_and_si128(a, b);
+					
+					cmp = _mm_cmpeq_epi8(v, zero);
+					
+					__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
+					__m128i alt2 = _mm_andnot_si128(cmp, v);
+					__m128i res = _mm_or_si128(alt1, alt2);
+					_mm_store_si128((__m128i*)&prow[resaddr], res);
+
+					n = bp[3];
+					bp += 3;
+				}
+
+				grandtot = _mm_add_epi8(grandtot, cmp);
+				
+				signed char tmp[BLOCKSIZE];
+				_mm_storeu_si128((__m128i*)tmp, grandtot);
+			
+				for (int j=0;j<BLOCKSIZE;j++)
+				{
+					int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
+					if (!rv)
+					{
+						rv = prow[root*BLOCKSIZE+j];
+						tmp[j]--;
+					}
+					prow[root*BLOCKSIZE+j] = rv;
+					sum -= tmp[j] * cd->weights[i * BLOCKSIZE + j];
+				}			
+				
+			#else
+
+				int subsum[BLOCKSIZE] = {0};
+
+				while (bp[0] != -1)
+				{
+					const int n  = bp[0];
+					const int c1 = bp[1];
+					const int c2 = bp[2];
+					
+					for (int j=0;j<BLOCKSIZE;j++)
+					{
+						const int a = prow[c1*BLOCKSIZE+j];
+						const int b = prow[c2*BLOCKSIZE+j];
+					
+						int v = a & b;
+						if (!v)
+						{
+							v = a | b;
+							++subsum[j];
+						}
+						
+						prow[n*BLOCKSIZE+j] = v;
+					}
+					
+					bp += 3;
+				}
 				
 				for (int j=0;j<BLOCKSIZE;j++)
 				{
-					const int a = prow[c1*BLOCKSIZE+j];
-					const int b = prow[c2*BLOCKSIZE+j];
-				
-					int v = a & b;
-					if (!v)
+					int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
+					if (!rv)
 					{
-						v = a | b;
+						rv = prow[root*BLOCKSIZE+j];
 						++subsum[j];
+						DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
 					}
-					
-					prow[n*BLOCKSIZE+j] = v;
+					prow[root*BLOCKSIZE+j] = rv;
+					sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
 				}
-				
-				bp += 3;
-			}
 			
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-				if (!rv)
-				{
-					rv = prow[root*BLOCKSIZE+j];
-					++subsum[j];
-					DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
-				}
-				prow[root*BLOCKSIZE+j] = rv;
-				sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
-			}
+			#endif
 		}
 		
 		
@@ -455,30 +509,34 @@ namespace optimize
 			t1 *= BLOCKSIZE;
 
 			#if defined(USE_SIMD)
-			__m128i grandtot = _mm_setzero_si128();
+			__m128i zero = _mm_setzero_si128();
+			__m128i grandtot = _mm_set1_epi32(0);
+			const __m128i vk0 = _mm_set1_epi8(0);       // constant vector of all 0s for use with _mm_unpacklo_epi8/_mm_unpackhi_epi8
+			const __m128i vk1 = _mm_set1_epi16(1);      // constant vector of all 1s for use with _mm_madd_epi16
+
 			for (int i=0;i<cd->packunits;i++)
 			{
-				st_t *P = &cd->pstate[cd->memwidth * i];
 				st_t *F = &cd->fstate[cd->memwidth * i];
-
-				__m128i zero = _mm_setzero_si128();
-				__m128i ft0 = _mm_loadu_si128((__m128i*)&F[t0]); 
-				__m128i ft1 = _mm_loadu_si128((__m128i*)&F[t1]);
-				__m128i ftr = _mm_loadu_si128((__m128i*)&F[target_root]);
-				__m128i wgh = _mm_loadu_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
+				__m128i ft0 = _mm_load_si128((__m128i*)&F[t0]); 
+				__m128i ft1 = _mm_load_si128((__m128i*)&F[t1]);
+				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
+				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
 				__m128i rh1 = _mm_or_si128(ft0, ft1);
 				__m128i tot = _mm_and_si128(ftr, rh1);
 				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
 				__m128i subtot = _mm_and_si128(cmp, wgh);
-				grandtot = _mm_add_epi8(grandtot, subtot);
+				
+				// crazy add
+				__m128i vl = _mm_unpacklo_epi8(subtot, vk0);
+				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
 			}
 			
-			unsigned char tmp[BLOCKSIZE];
-			_mm_storeu_si128((__m128i*)tmp, grandtot);
-			for (int i=0;i<BLOCKSIZE;i++)
-			{
-				sum += tmp[i];
-			}
+			// and super sum
+			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4)); 
+			sum += _mm_cvtsi128_si32(grandtot);
 			
 			#else
 			for (int i=0;i<cd->packunits;i++)
@@ -502,7 +560,37 @@ namespace optimize
 			target_root *= BLOCKSIZE;
 			t0 *= BLOCKSIZE;
 			t1 *= BLOCKSIZE;
-		
+	
+			#if defined(USE_SIMD)
+			__m128i zero = _mm_setzero_si128();
+			__m128i grandtot = _mm_set1_epi32(0);
+			const __m128i vk0 = _mm_set1_epi8(0);       // constant vector of all 0s for use with _mm_unpacklo_epi8/_mm_unpackhi_epi8
+			const __m128i vk1 = _mm_set1_epi16(1);      // constant vector of all 1s for use with _mm_madd_epi16
+
+			for (int i=0;i<cd->packunits;i++)
+			{
+				st_t *O = &cd->ostate[cd->memwidth * i];
+				st_t *F = &cd->fstate[cd->memwidth * i];
+				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
+				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
+				__m128i rh1 = _mm_load_si128((__m128i*)&O[t0]);
+				__m128i tot = _mm_and_si128(ftr, rh1);
+				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
+				__m128i subtot = _mm_and_si128(cmp, wgh);
+
+				// crazy add
+				__m128i vl = _mm_unpacklo_epi8(subtot, vk0);
+				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
+			}
+			
+			// here too
+			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4)); 
+			sum += _mm_cvtsi128_si32(grandtot);
+			
+			#else			
 			for (int i=0;i<cd->packunits;i++)
 			{
 				st_t *O = &cd->ostate[cd->memwidth * i];
@@ -515,6 +603,7 @@ namespace optimize
 					}
 				}
 			}
+			#endif
 		}
 		
 		return sum;
@@ -529,14 +618,13 @@ namespace optimize
 		for (int i=0;i<cd->packunits;i++)
 		{
 			// offset to the right row into the submatrix table
-			st_t *P = &cd->pstate[cd->memwidth * i];
 			st_t *F = &cd->fstate[cd->memwidth * i];
 			
 			#if defined(USE_SIMD)
-				__m128i a = _mm_loadu_si128((__m128i*)&F[s0]); 
-				__m128i b = _mm_loadu_si128((__m128i*)&F[s1]);
+				__m128i a = _mm_load_si128((__m128i*)&F[s0]); 
+				__m128i b = _mm_load_si128((__m128i*)&F[s1]);
 				__m128i c = _mm_or_si128(a, b);
-				_mm_storeu_si128((__m128i*)&F[new_node], c);
+				_mm_store_si128((__m128i*)&F[new_node], c);
 			#else
 				for (int j=0;j<BLOCKSIZE;j++)
 					F[new_node+j] = F[s0+j] | F[s1+j];

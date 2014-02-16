@@ -22,8 +22,6 @@ namespace newick
 		c[0] = d->network[where].c0;
 		c[1] = d->network[where].c1;
 		c[2] = d->network[where].c2;
-
-		char tmp[64];
 				
 		subparts sp[3];
 		std::string st[3];

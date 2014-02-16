@@ -56,7 +56,7 @@ namespace smart
 			int min = 100000000;
 			for (int i=0;i<out.count;i+=2)
 			{
-				network::idx_t neu = network::insert(t, out.pairs[i], out.pairs[i+1], taxons[pick]);
+				network::insert(t, out.pairs[i], out.pairs[i+1], taxons[pick]);
 				int d = optimize::optimize(t, t1);
 				if (d < min)
 				{
