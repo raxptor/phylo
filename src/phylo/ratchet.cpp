@@ -16,7 +16,7 @@ namespace ratchet
 {
 	void run(network::data *d, tbr::output *out)
 	{
-		int boosts = rand_u32() % (d->mtx_characters / 8 + 2) + 1;
+		int boosts = (d->mtx_characters / 5) + 1;
 		int picks[1024];
 		for (int i=0;i<boosts;i++)
 			picks[i] = rand_u32() % d->mtx_characters;
@@ -30,7 +30,7 @@ namespace ratchet
 		if (rand_u32()%10 > 5)
 			nw = 0;
 		else
-			nw = rand_u32()%10;
+			nw = 10;
 			
 		// manipulate
 		for (int i=0;i<boosts;i++)
@@ -67,13 +67,13 @@ namespace ratchet
 		{
 			if (!tbr::run(new_net, out))
 				break;
-				
 		}
 
+		network::copy(new_net, out->best_network);
+		
 		if (out->length < old)
 		{
 			int d = optimize::optimize(out->best_network);
-			network::copy(new_net, out->best_network);
 			
 			std::cout << "ratchet: found net (ph2) with dist " << d << " recorded(" << out->length << ") previous(" << old << ")" << std::endl;
 			newick::print(new_net);

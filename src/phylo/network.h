@@ -67,8 +67,10 @@ namespace network
 	// needs to be 64*
 	void to_string(network::data *data, char *buffer, unsigned int bufsize);
 	
+	void sort(network::data *data);
+	void to_string_2(network::data *data, char **out, int node, int parent);
+	
 	void print_characters(data *d);
-
 	void free(data *d);
 }
 

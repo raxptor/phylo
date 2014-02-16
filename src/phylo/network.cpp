@@ -383,6 +383,83 @@ namespace network
 		bottomup[tmpOrderOut] = -1;
 	}
 
+	// only works on FULL nets	
+	int sort_and_return(network::node *net, int taxons, int node, int parent)
+	{
+		if (node < taxons)
+		{
+			return node;
+		}
+
+		int c0 = net[node].c0;
+		int c1 = net[node].c1;
+		int c2 = net[node].c2;
+		
+		
+		int v0 = 100000;
+		int v1 = 100000;
+		int v2 = 100000;
+		
+		if (c0 >= 0 && c0 != parent)
+			v0 = sort_and_return(net, taxons, c0, node);
+		if (c1 >= 0 && c1 != parent)
+			v1 = sort_and_return(net, taxons, c1, node);
+		if (c2 >= 0 && c2 != parent)
+			v2 = sort_and_return(net, taxons, c2, node);
+			
+		if (v0 > v1)
+		{
+			std::swap(v0, v1);
+			std::swap(c0, c1);
+		}
+		if (v0 > v2)
+		{
+			std::swap(v0, v2);
+			std::swap(c0, c2);
+		}
+		if (v1 > v2)
+		{
+			std::swap(v1, v2);
+			std::swap(c1, c2);
+		}
+		
+		net[node].c0 = c0;
+		net[node].c1 = c1;
+		net[node].c2 = c2;
+		return v0;
+	}
+	
+	void sort(network::data *network)
+	{
+		sort_and_return(network->network, network->mtx_taxons, network->network[0].c0, NOT_IN_NETWORK);
+	}
+	
+	void to_string_2(network::data *data, char **out, int node, int parent)
+	{
+		int c0 = data->network[node].c0;
+		int c1 = data->network[node].c1;
+		int c2 = data->network[node].c2;
+	
+		if (node < data->mtx_taxons)
+		{
+			itoa_hex(node, *out);
+			while (**out) (*out)++;
+		}
+		
+		*(*out)++ = '[';
+		
+		if (c0 >= 0 && c0 != parent)
+			to_string_2(data, out, c0, node);
+			
+		if (c1 >= 0 && c1 != parent)
+			to_string_2(data, out, c1, node);
+	
+		if (c2 >= 0 && c2 != parent)
+			to_string_2(data, out, c2, node);
+		
+		*(*out)++ = ']';
+	}
+
 	void to_string(network::data *data, char *buffer, unsigned int bufsize)
 	{
 		/*

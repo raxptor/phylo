@@ -13,7 +13,7 @@ namespace tbr
 	//#define DPRINT(x) { std::cout << x << std::endl; }
 	#define DPRINT(x) { }
 	
-//	#define CHECK_RESULTS
+	//#define CHECK_RESULTS
 
 	enum
 	{
@@ -185,6 +185,8 @@ namespace tbr
 				
 				DPRINT("merge diff = " << mergediff << " newlength = " << newlength << " prevlength=" << out->length);
 				
+				char treebuf[4096];
+				
 				if (newlength < out->length)
 				{
 					out->length = newlength;
@@ -215,8 +217,16 @@ namespace tbr
 						optimize::print_state(d->opt, d->allocnodes, d->allocnodes);
 						exit(0);
 					}
+					
+					network::sort(target);
+					char *outbuf = treebuf;
+					network::to_string_2(target, &outbuf, 0, network::NOT_IN_NETWORK);
+					*outbuf = 0;
+					
+					DPRINT("sorted is " << treebuf);
+					
 					out->equal_length.clear();
-					out->equal_length.insert(newick::from_network(target, 0));
+					out->equal_length.insert(treebuf);
 				}
 				else if (newlength == out->length)
 				{
@@ -237,10 +247,17 @@ namespace tbr
 						d->network[a].c2 = _b0;
 					}
 					
-					unsigned int i = out->equal_length.size();
-					out->equal_length.insert(newick::from_network(d, 0));
+					char *bufptr = treebuf;
+					network::sort(d);
+					network::to_string_2(d, &bufptr, 0, network::NOT_IN_NETWORK);
+					*bufptr = 0;
 					
-					if (rand_u32()%10==0)
+					DPRINT("sorted is " << treebuf);
+					
+					unsigned int i = out->equal_length.size();
+					out->equal_length.insert(treebuf);
+					
+					if (rand_u32()%3==0)
 						network::copy(out->best_network, d);
 
 					d->network[_b0] = b0;
@@ -307,12 +324,10 @@ namespace tbr
 		{
 			if (tmp.pairs[i] >= d->mtx_taxons && tmp.pairs[i+1] >= d->mtx_taxons)
 			{
-				continue;
 				// lets work on a temp copy since bisecting and rouletting leaves it bisected.
 				// could maybe join them together the original way for the last step
 				network::copy(bisected, d);
 				network::idx_t s0, s1;
-
 
 				bisect(bisected, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
 			

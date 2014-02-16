@@ -119,7 +119,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 1;
+		const int num = 2;
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = smart::make(mtx);

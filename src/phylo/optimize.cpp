@@ -2,12 +2,16 @@
 #include "character.h"
 #include "newick.h"
 
+#include <emmintrin.h>
+
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
 
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
+
+#define USE_SIMD
 
 namespace optimize
 {
@@ -17,7 +21,7 @@ namespace optimize
 	};
 	
 	enum {
-		BLOCKSIZE = 8 // do not change
+		BLOCKSIZE = 16 // do not change
 	};
 	
 	typedef unsigned char st_t;
@@ -32,7 +36,7 @@ namespace optimize
 		st_t ostate[BUFSIZE];
 		st_t pstate[BUFSIZE]; 
 		st_t fstate[BUFSIZE];
-		int weights[MAX_CHARACTERS];
+		st_t weights[MAX_CHARACTERS];
 	};
 	
 	struct optstate
@@ -449,11 +453,39 @@ namespace optimize
 			target_root *= BLOCKSIZE;
 			t0 *= BLOCKSIZE;
 			t1 *= BLOCKSIZE;
-		
+
+			#if defined(USE_SIMD)
+			__m128i grandtot = _mm_setzero_si128();
 			for (int i=0;i<cd->packunits;i++)
 			{
 				st_t *P = &cd->pstate[cd->memwidth * i];
 				st_t *F = &cd->fstate[cd->memwidth * i];
+
+				__m128i zero = _mm_setzero_si128();
+				__m128i ft0 = _mm_loadu_si128((__m128i*)&F[t0]); 
+				__m128i ft1 = _mm_loadu_si128((__m128i*)&F[t1]);
+				__m128i ftr = _mm_loadu_si128((__m128i*)&F[target_root]);
+				__m128i wgh = _mm_loadu_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
+				__m128i rh1 = _mm_or_si128(ft0, ft1);
+				__m128i tot = _mm_and_si128(ftr, rh1);
+				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
+				__m128i subtot = _mm_and_si128(cmp, wgh);
+				grandtot = _mm_add_epi8(grandtot, subtot);
+			}
+			
+			unsigned char tmp[BLOCKSIZE];
+			_mm_storeu_si128((__m128i*)tmp, grandtot);
+			for (int i=0;i<BLOCKSIZE;i++)
+			{
+				sum += tmp[i];
+			}
+			
+			#else
+			for (int i=0;i<cd->packunits;i++)
+			{		
+				st_t *P = &cd->pstate[cd->memwidth * i];
+				st_t *F = &cd->fstate[cd->memwidth * i];
+			
 				for (int j=0;j<BLOCKSIZE;j++)
 				{
 					// offset to the right row into the submatrix table
@@ -463,6 +495,7 @@ namespace optimize
 					}
 				}
 			}
+			#endif
 		}
 		else
 		{
@@ -498,8 +531,16 @@ namespace optimize
 			// offset to the right row into the submatrix table
 			st_t *P = &cd->pstate[cd->memwidth * i];
 			st_t *F = &cd->fstate[cd->memwidth * i];
-			for (int j=0;j<BLOCKSIZE;j++)
-				F[new_node+j] = F[s0+j] | F[s1+j];
+			
+			#if defined(USE_SIMD)
+				__m128i a = _mm_loadu_si128((__m128i*)&F[s0]); 
+				__m128i b = _mm_loadu_si128((__m128i*)&F[s1]);
+				__m128i c = _mm_or_si128(a, b);
+				_mm_storeu_si128((__m128i*)&F[new_node], c);
+			#else
+				for (int j=0;j<BLOCKSIZE;j++)
+					F[new_node+j] = F[s0+j] | F[s1+j];
+			#endif
 		}
 	}
 	
@@ -586,14 +627,16 @@ namespace optimize
 	
 	void set_weight(optstate *st, int pos, int weight)
 	{
-		if (weight < st->unordered.count)
+		if (pos < st->unordered.count)
 		{
 			st->unordered.weights[pos] = weight;
 		}
+		/*
 		else
 		{
 			std::cerr << "Weight out of range, pos=" << pos << " < " << st->unordered.count << std::endl;
 		}
+		*/
 	}
 
 	void free(optstate *s)
