@@ -35,7 +35,7 @@ namespace ratchet
 		// manipulate
 		for (int i=0;i<boosts;i++)
 		{
-			optimize::set_weight(new_net->opt, picks[i], nw);
+		//	optimize::set_weight(new_net->opt, picks[i], nw);
 		}
 		
 		// set up temporary output structure for tbr, we won't record any of these
@@ -56,8 +56,8 @@ namespace ratchet
 		network::free(tout.best_network);
 		
 		// restore
-		for (int i=0;i<boosts;i++)
-			optimize::set_weight(new_net->opt, picks[i], 1);
+	//	for (int i=0;i<boosts;i++)
+	//		optimize::set_weight(new_net->opt, picks[i], 1);
 		
 		// see if we did any better than previous best
 		const character::distance_t prestore = optimize::optimize(out->best_network);

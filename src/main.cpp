@@ -101,7 +101,7 @@ int main(int argc, const char **argv)
 	if (method && !strcmp(method, "smart"))
 	{
 		network::data *tmp = smart::make(mtx);
-		optimize::optimize(tmp);
+		std::cout << "smart length = " << optimize::optimize(tmp) << std::endl;
 		network::print_characters(tmp);
 	}
 	
