@@ -12,12 +12,12 @@
 namespace optimize
 {
 	enum {
-		BUFSIZE  = 80000, // char group * taxa limit
-		MAX_CHARACTERS = 2048
+		BUFSIZE  = 32768, // char group * taxa limit
+		MAX_CHARACTERS = 1024
 	};
 	
 	enum {
-		BLOCKSIZE = 32 // do not change
+		BLOCKSIZE = 8 // do not change
 	};
 	
 	typedef unsigned char st_t;
@@ -97,10 +97,6 @@ namespace optimize
 		return num_units(count) * BLOCKSIZE;
 	}
 	
-	inline int char_ofs(cgroup_data *source, int blockindex, int charofs, int taxon)
-	{
-		return blockindex * BLOCKSIZE + taxon * source->memwidth + charofs;
-	}
 	
 	// Converts the values in the matrix into bit forms like this
 	//
@@ -127,7 +123,8 @@ namespace optimize
 
 		if (out->memwidth * out->packunits > BUFSIZE)
 		{
-			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->memwidth * maxnodes << std::endl;
+			std::cout << "packunits:" << out->packunits <<  " memwidth=" << out->memwidth << std::endl;
+			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->memwidth * out->packunits << std::endl;
 			exit(-1);
 		}
 		if (out->packunits * BLOCKSIZE > MAX_CHARACTERS)
@@ -136,9 +133,9 @@ namespace optimize
 			exit(-1);
 		}
 
-		memset(out->ostate, 0x01, out->memwidth * out->packunits);
-		memset(out->pstate, 0x01, out->memwidth * out->packunits);
-		memset(out->fstate, 0x01, out->memwidth * out->packunits);
+		memset(out->ostate, 0x03, out->memwidth * out->packunits);
+		memset(out->pstate, 0x03, out->memwidth * out->packunits);
+		memset(out->fstate, 0x03, out->memwidth * out->packunits);
 		memset(out->weights, 0x00, out->packunits * BLOCKSIZE);
 
 		for (unsigned int i=0;i<out->packunits;i++)
@@ -152,7 +149,7 @@ namespace optimize
 					out->ostate[i * out->memwidth + BLOCKSIZE * t + p] = mask(source->submatrix[mtxofs]);
 				}
 			}
-			for (int p=0;p<BLOCKSIZE;p++)
+			for (int p=0;p<out->count;p++)
 				out->weights[i*BLOCKSIZE+p] = 1;
 		}
 		/*
@@ -181,7 +178,7 @@ namespace optimize
 	
 	void copy_cgroup_weights(cgroup_data *target, cgroup_data *source)
 	{
-		for (unsigned int i=0;i<source->count;i++)
+		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
 			target->weights[i] = source->weights[i];
 	}
 	
@@ -219,18 +216,34 @@ namespace optimize
 		{
 			std::cout.width(3);
 			std::cout << t << " f => ";
-			for (unsigned int i=0;i<cd->count;i++)
+			for (int i=0;i<cd->packunits;i++)
 			{
-				std::cout.width(3);
-				std::cout << (int)(cd->fstate[i * maxnodes + t]);
+				for (unsigned int j=0;j<BLOCKSIZE;j++)
+				{
+					std::cout.width(1);
+					std::cout << (int)(cd->fstate[i * cd->memwidth + BLOCKSIZE * t + j]);
+				}
 			}
 			std::cout << " p => ";
-			for (unsigned int i=0;i<cd->count;i++)
+			for (int i=0;i<cd->packunits;i++)
 			{
-				std::cout.width(3);
-				std::cout << (int)(cd->pstate[i * maxnodes + t]);
+				for (unsigned int j=0;j<BLOCKSIZE;j++)
+				{
+					std::cout.width(1);
+					std::cout << (int)(cd->pstate[i * cd->memwidth + BLOCKSIZE * t + j]);
+				}
+			}
+			std::cout << " o => ";
+			for (int i=0;i<cd->packunits;i++)
+			{
+				for (unsigned int j=0;j<BLOCKSIZE;j++)
+				{
+					std::cout.width(1);
+					std::cout << (int)(cd->ostate[i * cd->memwidth + BLOCKSIZE * t + j]);
+				}
 			}
 			std::cout << std::endl;
+
 		}
 	}
 
@@ -259,7 +272,7 @@ namespace optimize
 	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd)
 	{
 		int queue;
-		int fin_ancestor[256][8];
+		int fin_ancestor[256][BLOCKSIZE];
 		int node[1024];
 		
 		DPRINT("Final pass from root [" << root << "] taxons=" << taxons);
@@ -298,11 +311,12 @@ namespace optimize
 				const int blkKid0 = BLOCKSIZE * kid0;
 				const int blkKid1 = BLOCKSIZE * kid1;
 				
+				int *farray = &fin_ancestor[queue][0];
 				for (int j=0;j<BLOCKSIZE;j++)
 				{
-					const int fa = fin_ancestor[queue][j];
-		
+					const int fa = farray[j];
 					F[blkMe + j] = fa & P[blkMe + j];
+
 					if (F[blkMe + j] != fa)
 					{
 						// change here
@@ -349,11 +363,11 @@ namespace optimize
 			}
 			
 			// Need to treat terminal nodes specially when they can have ? in them
-			for (int i=0;i<taxp_count;i+=2)
+			for (int A=0;A<taxp_count;A+=2)
 			{
-				const int r = BLOCKSIZE * taxp[i];
-				const int p = BLOCKSIZE * taxp[i+1];
-			
+				const int r = BLOCKSIZE * taxp[A];
+				const int p = BLOCKSIZE * taxp[A+1];
+
 				for (int j=0;j<BLOCKSIZE;j++)
 				{
 					int f_root = P[r + j] & F[p + j];
@@ -363,7 +377,7 @@ namespace optimize
 				}
 			}
 		}
-					
+		
 		return 0;
 	}
 	
@@ -371,6 +385,7 @@ namespace optimize
 	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
 	{
 		int sum = 0;
+
 
 		for (int i=0;i<cd->packunits;i++)
 		{
@@ -393,9 +408,6 @@ namespace optimize
 					const int a = prow[c1*BLOCKSIZE+j];
 					const int b = prow[c2*BLOCKSIZE+j];
 				
-					DPRINT("OFFSET is " << cd->memwidth * i << " and " << j);
-					DPRINT(n << " => " << c1 << ", " << c2 << "  a=" << a << " b=" << b);
-					
 					int v = a & b;
 					if (!v)
 					{
@@ -403,7 +415,6 @@ namespace optimize
 						++subsum[j];
 					}
 					
-					DPRINT("writing pstate[" << n << "] [char:" << i << "] = " << v << " sum=" << sum);
 					prow[n*BLOCKSIZE+j] = v;
 				}
 				
@@ -423,6 +434,7 @@ namespace optimize
 				sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
 			}
 		}
+		
 		
 		return sum;
 	}
@@ -551,12 +563,14 @@ namespace optimize
 				st->unordered.pstate[ofs1] = st->unordered.ostate[ofs1];
 			}
 		}
+		
 
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
 		
 		const int sum0 = 0;// single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
 		const int sum1 = single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered);
 		const int sum = sum0 + sum1;
+
 
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
 		
@@ -581,12 +595,6 @@ namespace optimize
 			std::cerr << "Weight out of range, pos=" << pos << " < " << st->unordered.count << std::endl;
 		}
 	}
-	
-	void copy(optstate *target, optstate *source)
-	{
-		copy_cgroup_weights(&target->ordered, &source->ordered);
-		copy_cgroup_weights(&target->unordered, &source->unordered);
-	}
 
 	void free(optstate *s)
 	{
@@ -599,4 +607,11 @@ namespace optimize
 		DPRINT("[optimize] - First pass run to calculate length");
 		return optimize_for_tree(data->opt, data, root, write_final);
 	}
+
+	void copy(optstate *target, optstate *source)
+	{
+		copy_cgroup_weights(&target->ordered, &source->ordered);
+		copy_cgroup_weights(&target->unordered, &source->unordered);
+	}
+
 }

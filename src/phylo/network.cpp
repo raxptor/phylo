@@ -78,6 +78,10 @@ namespace network
 		d->freelist = new idx_t[d->freecount];
 		for (unsigned int i=0;i<d->freecount;i++)
 			d->freelist[i] = i + mtx->taxons;
+		for (unsigned int i=0;i<d->allocnodes;i++)
+		{
+			d->network[i].c0 = d->network[i].c1 = d->network[i].c2 = 0;
+		}
 
 		d->opt = optimize::create(d);
 		return d;

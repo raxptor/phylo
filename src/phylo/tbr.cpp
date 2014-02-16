@@ -86,21 +86,21 @@ namespace tbr
 		network::trace_edgelist(d, s0, &net0);
 
 		int length0, length1;
-
 		
 		for (int i=0;i<net0.count;i++)
 		{
 			if (net0.pairs[i] < d->mtx_taxons)
 			{
 				DPRINT("###### OPTIMIZING FIRST NETWORK " << net0.pairs[i]);
+				
 				length0 = optimize::optimize(d, net0.pairs[i], true);
+		
 				// newick::print(d, net0.pairs[i]);
 				DPRINT(" length was " << length0);
 				break;
 			}
 		}
-		
-		if (!single_source)
+				if (!single_source)
 		{
 			network::trace_edgelist(d, s1, &net1);
 
@@ -155,6 +155,8 @@ namespace tbr
 		network::idx_t a = network::node_alloc(d); // store the computation there
 		network::idx_t b = !single_source ? network::node_alloc(d) : -1;
 		
+
+
 		for (int i=0;i<net0.count;i+=2)
 		{
 			const network::idx_t _a0 = net0.pairs[i];
@@ -162,10 +164,12 @@ namespace tbr
 			const network::node a0 = d->network[_a0];
 			const network::node a1 = d->network[_a1];
 			
+
 			// alright, this outer is the source tree now
 			//
 			DPRINT("Prep source tree " << _a0 << " and " << _a1 << " to " << a);
 			optimize::prepare_source_tree_root(d, _a0, _a1, a);
+
 
 			for (int j=0;j<net1.count;j+=2)
 			{
@@ -290,6 +294,7 @@ namespace tbr
 	//
 	int run(network::data *d, output * out)
 	{
+
 		network::edgelist tmp;
 		network::trace_edgelist(d, 0, &tmp);
 		character::distance_t org_dist = optimize::optimize(d);
@@ -302,13 +307,17 @@ namespace tbr
 		{
 			if (tmp.pairs[i] >= d->mtx_taxons && tmp.pairs[i+1] >= d->mtx_taxons)
 			{
+				continue;
 				// lets work on a temp copy since bisecting and rouletting leaves it bisected.
 				// could maybe join them together the original way for the last step
 				network::copy(bisected, d);
 				network::idx_t s0, s1;
-				
+
+
 				bisect(bisected, tmp.pairs[i], tmp.pairs[i+1], &s0, &s1);
+			
 				roulette(bisected, org_dist, s0, s1, out, false);
+
 			}
 			else
 			{
@@ -327,7 +336,11 @@ namespace tbr
 				DPRINT("i am (" << taxon << ") others are " << r0 << "," << r1);
 				
 				network::disconnect(bisected, taxon);
+				
+				
 				roulette(bisected, org_dist, r0, taxon, out, true);
+				
+				
 			}
 		}
 		
