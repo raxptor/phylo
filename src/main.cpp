@@ -128,7 +128,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 4; // 1 best and 1 speculative (best will try ratchet differently, speculative will wander around)
+		const int num = 5; // 1 best and 1 speculative (best will try ratchet differently, speculative will wander around)
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = smart::make(mtx);
@@ -140,6 +140,8 @@ int main(int argc, const char **argv)
 		
 		std::cout << "Starting ratchet with random tree dist=" << out.length << std::endl;
 
+		int maxnew = 10;
+		
 		for (int i=0;i<1000/num;i++)
 		{
 			int oc = out.equal_length.size();
@@ -189,7 +191,10 @@ int main(int argc, const char **argv)
 				for (int j=i+1;j<num;j++)
 				{
 					if (!strcmp(tmpbuf[i], tmpbuf[j]))
-						smart::make_inplace(nw[j]);
+					{
+						if (maxnew-- > 0)
+							smart::make_inplace(nw[j]);
+					}
 				}
 			}
 					

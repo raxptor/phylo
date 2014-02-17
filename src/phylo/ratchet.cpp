@@ -46,7 +46,7 @@ namespace ratchet
 		tout.length = 1000000;
 		network::copy(tout.best_network, new_net);
 
-		for (int i=0;i<20;i++)
+		for (int i=0;i<50;i++)
 		{
 			if (tbr::run(new_net, &tout))
 				network::copy(new_net, tout.best_network);
@@ -66,7 +66,7 @@ namespace ratchet
 		// const character::distance_t prestore = optimize::optimize(out->best_network);
 
 		// run again (no temp out this time)
-		for (int i=0;i<20;i++)
+		for (int i=0;i<50;i++)
 		{
 			if (tbr::run(new_net, out))
 				network::copy(new_net, out->best_network);
