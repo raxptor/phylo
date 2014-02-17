@@ -268,7 +268,7 @@ namespace optimize
 	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd, int i)
 	{
 		int queue;
-		int fin_ancestor[256][BLOCKSIZE];
+		int ancestor[1024];
 		int node[1024];
 		
 		DPRINT("Final pass from root [" << root << "] taxons=" << taxons);
@@ -277,8 +277,9 @@ namespace optimize
 		st_t *P = &cd->pstate[cd->memwidth * i];
 		
 		for (int j=0;j<BLOCKSIZE;j++)
-			fin_ancestor[0][j] = P[BLOCKSIZE * root + j];
+			F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
 			
+		ancestor[0] = root;
 		node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
 		if (node[0] < 0)
 			node[0] = net[root].c0;
@@ -298,21 +299,21 @@ namespace optimize
 		while (queue >= 0)
 		{
 			const int me = node[queue];
+			const int anc = ancestor[queue];
 			const int kid0 = net[me].c1;
 			const int kid1 = net[me].c2;
 			
+			const int blkAncestor = BLOCKSIZE * anc;
 			const int blkMe = BLOCKSIZE * me;
 			const int blkKid0 = BLOCKSIZE * kid0;
 			const int blkKid1 = BLOCKSIZE * kid1;
-			
-			int *farray = &fin_ancestor[queue][0];
 			
 			st_t *FF = &cd->fstate[in_ofs];
 			st_t *PP = &cd->pstate[in_ofs];
 			
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
-				const int fa = farray[j];
+				const int fa = FF[blkAncestor];
 				const int pp0 = PP[blkKid0];
 				const int pp1 = PP[blkKid1];
 				
@@ -342,8 +343,7 @@ namespace optimize
 			if (kid0 >= taxons)
 			{
 				queue++;
-				for (int j=0;j<BLOCKSIZE;j++)
-					fin_ancestor[queue][j] = F[blkMe + j];
+				ancestor[queue] = me;
 				node[queue] = kid0;
 			}
 			else if (kid0 >= 0)
@@ -355,8 +355,7 @@ namespace optimize
 			if (kid1 >= taxons)
 			{
 				queue++;
-				for (int j=0;j<BLOCKSIZE;j++)
-					fin_ancestor[queue][j] = F[blkMe + j];
+				ancestor[queue] = me;
 				node[queue] = kid1;
 			}
 			else if (kid1 >= 0)
@@ -378,6 +377,10 @@ namespace optimize
 				int f_root = P[r + j] & F[p + j];
 				if (!f_root)
 					f_root = P[r + j];
+					
+				// these give the multi-state characters their final values
+				// at least for now this is how those ? are treated, they get
+				// final values here
 				F[r + j] = f_root;
 			}
 		}
