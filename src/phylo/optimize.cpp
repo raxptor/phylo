@@ -316,19 +316,22 @@ namespace optimize
 				const int fa = FF[blkAncestor];
 				const int pp0 = PP[blkKid0];
 				const int pp1 = PP[blkKid1];
+				const int ppMe = PP[blkMe];
+				const int parent_share = (pp0 | pp1) & fa;
 				
-				int fme = PP[blkMe] & fa;
+				const int subopt1 = ppMe | parent_share;
+				const int subopt2 = ppMe | fa;
+				int fme = ppMe & fa;
 				
 				if (fme != fa)
 				{
 					if (pp0 & pp1)
 					{
-						const int parent_share = (pp0 | pp1) & fa;
-						fme = parent_share | PP[blkMe];
+						fme = subopt1;
 					}
 					else
 					{
-						fme = PP[blkMe] | fa;
+						fme = subopt2;
 					}
 				}
 				
