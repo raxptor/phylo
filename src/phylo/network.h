@@ -40,7 +40,7 @@ namespace network
 		matrix::data *matrix;		
 	};
 	
-	data* alloc(matrix::data *mtx);
+	data* alloc(matrix::data *mtx, bool will_copy=false);
 	void copy(data *target, data *source);
 
 	// might not be optibal distance

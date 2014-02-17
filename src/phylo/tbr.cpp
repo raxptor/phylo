@@ -30,8 +30,9 @@ namespace tbr
 	
 	inline void count_networks()
 	{
-		if (++networks % 1000000 == 0)
-			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
+//		if (++networks % 1000000 == 0)
+//			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
+		++networks;
 		if (networks == g_treeTiming)
 		{
 			std::cout << "Timing done complete, processed " << networks << " networks." << std::endl;
@@ -158,7 +159,7 @@ namespace tbr
 				DPRINT("Gluing together " << _a0 << "-" << _a1 << " with " << _b0 << "-" << _b1 <<  " tmp nodes " << a << " and " << b);
 				
 				// 
-				const int mergediff = optimize::clip_merge_dist(d, a, _b0, _b1);
+				const int mergediff = optimize::clip_merge_dist(d, a, _b0, _b1, (out->length - clipped_length));
 				const int newlength = clipped_length + mergediff;
 				
 				DPRINT("merge diff = " << mergediff << " newlength = " << newlength << " prevlength=" << out->length);
@@ -253,7 +254,7 @@ namespace tbr
 				if (!single_source)
 				{
 					// verify	
-					network::data *tmp = network::alloc(d->matrix);
+					network::data *tmp = network::alloc(d->matrix, true);
 					network::copy(tmp, d);
 					network::edge_split(tmp->network, _a0, _a1, a);
 					network::edge_split(tmp->network, _b0, _b1, b);
@@ -290,9 +291,9 @@ namespace tbr
 	//
 	int run(network::data *d, output * out)
 	{
-		network::data *bisected = network::alloc(d->matrix);
-		network::data *optimized = network::alloc(d->matrix);
-		
+		network::data *bisected = network::alloc(d->matrix, true);
+		network::data *optimized = network::alloc(d->matrix, true);
+
 		network::copy(optimized, d);
 		character::distance_t org_dist = optimize::optimize(optimized, 0, true);
 		
@@ -302,9 +303,6 @@ namespace tbr
 		network::trace_edgelist(optimized, 0, &tmp);
 
 		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << org_dist);
-
-		int succ = 0;
-		int tot = 0;
 		
 		for (int i=0;i<tmp.count;i+=2)
 		{
@@ -360,7 +358,7 @@ namespace tbr
 				// now we erase and pretend it never happened
 
 				optimize::prepare_source_tree_root(bisected, src1, src2, tmpnode);
-				const int clipped_length = org_dist - optimize::clip_merge_dist(bisected, tmpnode, tgt1, tgt2);
+				const int clipped_length = org_dist - optimize::clip_merge_dist(bisected, tmpnode, tgt1, tgt2, 100000);
 				
 				
 				DPRINT("S = " << tmp.pairs[i+1]);

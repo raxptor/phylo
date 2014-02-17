@@ -22,7 +22,7 @@
 namespace 
 {
 	// it prints negative numbers as x
-	void itoa_hex(int num, char *where)
+	inline void itoa_hex(int num, char *where)
 	{
 		static const char *hex = "0123456789abcdef";
 		if (num < 0)
@@ -64,7 +64,7 @@ namespace
 
 namespace network
 {
-	data* alloc(matrix::data *mtx)
+	data* alloc(matrix::data *mtx, bool will_copy)
 	{
 		data *d = new data();
 		d->matrix = mtx;
@@ -72,18 +72,19 @@ namespace network
 		d->mtx_characters = mtx->characters;
 		d->allocnodes = 2 * mtx->taxons - 2;
 		d->network = new node[d->allocnodes];
+		d->freelist = new idx_t[d->allocnodes - mtx->taxons];
 
 		// free list
-		d->freecount = d->allocnodes - mtx->taxons;
-		d->freelist = new idx_t[d->freecount];
-		for (unsigned int i=0;i<d->freecount;i++)
-			d->freelist[i] = i + mtx->taxons;
-		for (unsigned int i=0;i<d->allocnodes;i++)
+		if (!will_copy)
 		{
-			d->network[i].c0 = d->network[i].c1 = d->network[i].c2 = 0;
+			d->freecount = d->allocnodes - mtx->taxons;
+			for (unsigned int i=0;i<d->freecount;i++)
+				d->freelist[i] = i + mtx->taxons;
+			for (unsigned int i=0;i<d->allocnodes;i++)
+				d->network[i].c0 = d->network[i].c1 = d->network[i].c2 = 0;
 		}
-
-		d->opt = optimize::create(d);
+		
+		d->opt = optimize::create(d, will_copy);
 		return d;
 	}
 	
@@ -433,7 +434,7 @@ namespace network
 			itoa_hex(node, *out);
 			while (**out) (*out)++;
 		}
-		
+
 		*(*out)++ = '[';
 		
 		if (c0 >= 0 && c0 != parent)
@@ -510,32 +511,63 @@ namespace network
 			// only HTU & root
 			if (cur != root && cur >= data->mtx_taxons) 
 			{
-				tmpOrder[tmpOrderOut++] = cur;
-				if (net[cur].c0 != src)
-					tmpOrder[tmpOrderOut++] = net[cur].c0;		
-				if (net[cur].c1 != src)
-					tmpOrder[tmpOrderOut++] = net[cur].c1;
-				if (net[cur].c2 != src)
-					tmpOrder[tmpOrderOut++] = net[cur].c2;
+				tmpOrder[tmpOrderOut] = cur;
+				if (net[cur].c0 == src)
+				{
+					tmpOrder[tmpOrderOut+1] = net[cur].c1;
+					tmpOrder[tmpOrderOut+2] = net[cur].c2;
+				}
+				else if (net[cur].c1 == src)
+				{
+					tmpOrder[tmpOrderOut+1] = net[cur].c0;
+					tmpOrder[tmpOrderOut+2] = net[cur].c2;
+				}
+				else
+				{
+					tmpOrder[tmpOrderOut+1] = net[cur].c0;
+					tmpOrder[tmpOrderOut+2] = net[cur].c1;
+				}
+				
+				tmpOrderOut += 3;
 			}
 			
 			// always make c0 point upwards
-			out[cur] = net[cur];
-			
-			if (out[cur].c1 == src)
-				std::swap(out[cur].c0, out[cur].c1);
-			else if (out[cur].c2 == src)
-				std::swap(out[cur].c0, out[cur].c2);
-				
-			const idx_t c[3] = { net[cur].c0, net[cur].c1, net[cur].c2 };
-			for (int i=0;i<3;i++)
+			if (net[cur].c0 == src)
 			{
-				if (c[i] != src && c[i] != NOT_IN_NETWORK)
-				{
-					++queue;
-					toexplore[queue] = c[i];
-					source[queue] = cur;
-				}
+				out[cur].c0 = net[cur].c0;
+				out[cur].c1 = net[cur].c1;
+				out[cur].c2 = net[cur].c2;
+			}
+			else if (net[cur].c1 == src)
+			{
+				out[cur].c0 = net[cur].c1;
+				out[cur].c1 = net[cur].c0;
+				out[cur].c2 = net[cur].c2;
+			}
+			else
+			{
+				out[cur].c0 = net[cur].c2;
+				out[cur].c1 = net[cur].c0;
+				out[cur].c2 = net[cur].c1;
+			}
+				
+			if (net[cur].c0 != src && net[cur].c0 != NOT_IN_NETWORK) 
+			{
+				++queue;
+				toexplore[queue] = net[cur].c0;
+				source[queue] = cur;
+			}
+			if (net[cur].c1 != src && net[cur].c1 != NOT_IN_NETWORK) 
+			{
+				++queue;
+				toexplore[queue] = net[cur].c1;
+				source[queue] = cur;
+			}
+			if (net[cur].c2 != src && net[cur].c2 != NOT_IN_NETWORK) 
+			{
+				++queue;
+				toexplore[queue] = net[cur].c2;
+				source[queue] = cur;
 			}
 		}
 		

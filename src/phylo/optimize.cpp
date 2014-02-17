@@ -172,13 +172,16 @@ namespace optimize
 	
 	void copy_cgroup(cgroup_data *target, cgroup_data *source)
 	{
+		target->memwidth = source->memwidth;
+		target->packunits = source->packunits;
+		memcpy(target->ostate, source->ostate, source->memwidth * source->packunits);
 		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
 		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
 		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
 			target->weights[i] = source->weights[i];
 	}
 	
-	optstate* create(network::data *d)
+	optstate* create(network::data *d, bool will_copy)
 	{
 		optstate *st = new optstate();
 		st->matrix = d->matrix;
@@ -187,8 +190,11 @@ namespace optimize
 		st->net = new network::node[d->allocnodes];
 		st->root = -1;
 		
-		optimize_cgroups(&d->matrix->unordered, &st->unordered, st->maxnodes, d->mtx_taxons);
-		optimize_cgroups(&d->matrix->ordered, &st->ordered, st->maxnodes, d->mtx_taxons);
+		if (!will_copy)
+		{
+			optimize_cgroups(&d->matrix->unordered, &st->unordered, st->maxnodes, d->mtx_taxons);
+			optimize_cgroups(&d->matrix->ordered, &st->ordered, st->maxnodes, d->mtx_taxons);
+		}
 		return st;
 	}
 	
@@ -300,32 +306,36 @@ namespace optimize
 		{
 			const int me = node[queue];
 			const int anc = ancestor[queue];
-			const int kid0 = net[me].c1;
-			const int kid1 = net[me].c2;
-			
-			const int blkAncestor = BLOCKSIZE * anc;
-			const int blkMe = BLOCKSIZE * me;
-			const int blkKid0 = BLOCKSIZE * kid0;
-			const int blkKid1 = BLOCKSIZE * kid1;
 			
 			st_t *FF = &cd->fstate[in_ofs];
 			st_t *PP = &cd->pstate[in_ofs];
+		
+			const int blkAncestor = BLOCKSIZE * anc;
+			const int blkMe = BLOCKSIZE * me;
+			
+			const int kid0 = net[me].c1;
+			const int kid1 = net[me].c2;
+			
+			const int blkKid0 = BLOCKSIZE * kid0;
+			const int blkKid1 = BLOCKSIZE * kid1;
 			
 			#if defined(USE_SIMD)
-				__m128i zero = _mm_setzero_si128();
 						
+				__m128i ppMe = _mm_load_si128((__m128i*)&PP[blkMe]);
 				__m128i fa = _mm_load_si128((__m128i*)&FF[blkAncestor]);
 				__m128i pp0 = _mm_load_si128((__m128i*)&PP[blkKid0]);
 				__m128i pp1 = _mm_load_si128((__m128i*)&PP[blkKid1]);
-				__m128i ppMe = _mm_load_si128((__m128i*)&PP[blkMe]);
-				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
 				
-				__m128i subopt1 = _mm_or_si128(ppMe, parent_share);
-				__m128i subopt2 = _mm_or_si128(ppMe, fa);
 				__m128i fme = _mm_and_si128(ppMe, fa);
 
 				__m128i cmpOuter = _mm_cmpeq_epi8(fme, fa);
+				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
+				
+				__m128i zero = _mm_setzero_si128();
 				__m128i cmpInner = _mm_cmpeq_epi8(_mm_and_si128(pp0, pp1), zero);
+
+				__m128i subopt1 = _mm_or_si128(ppMe, parent_share);
+				__m128i subopt2 = _mm_or_si128(ppMe, fa);
 				
 				// result of inner statement
 				__m128i innerResult = _mm_or_si128(_mm_andnot_si128(cmpInner, subopt1),
@@ -558,8 +568,6 @@ namespace optimize
 	// If P & F are the same 
 	void qsearch_shortcut(cgroup_data *cd, int source_clip_node)
 	{
-		int s=0, f=0;
-		
 		for (int i=0;i<cd->packunits;i++)
 		{
 			st_t *P = &cd->pstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
@@ -594,23 +602,30 @@ namespace optimize
 		qsearch_shortcut(&d->opt->ordered, source_clip_node);
 	}
 	
-	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1)
+	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1, int max)
 	{
 		int sum = 0;
 		
 		// for all characters in this group
 		if (t1 != network::NOT_IN_NETWORK)
 		{
+		
 			target_root *= BLOCKSIZE;
 			t0 *= BLOCKSIZE;
 			t1 *= BLOCKSIZE;
+
 
 			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
 			const __m128i vk0 = _mm_set1_epi8(0);
 			const __m128i vk1 = _mm_set1_epi16(1);   
-
+			__m128i supertot;
+			
+			// in the hope for better caching
+			if (t1 < t0)
+				std::swap(t0, t1);
+			
 			for (int i=0;i<cd->packunits;i++)
 			{
 				st_t *F = &cd->fstate[cd->memwidth * i];
@@ -618,6 +633,7 @@ namespace optimize
 				__m128i ft1 = _mm_load_si128((__m128i*)&F[t1]);
 				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
 				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
+								
 				__m128i rh1 = _mm_or_si128(ft0, ft1);
 				__m128i tot = _mm_and_si128(ftr, rh1);
 				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
@@ -628,12 +644,20 @@ namespace optimize
 				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
+								
+				if ((i&3) == 1)
+				{
+					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+					if (_mm_cvtsi128_si32(supertot) > max)
+						return 100000;
+				}
 			}
 			
 			// and super sum
-			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4)); 
-			sum += _mm_cvtsi128_si32(grandtot);
+			supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+			supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+			sum += _mm_cvtsi128_si32(supertot);
 			
 			#else
 			for (int i=0;i<cd->packunits;i++)
@@ -662,8 +686,11 @@ namespace optimize
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
 			const __m128i vk0 = _mm_set1_epi8(0);       
-			const __m128i vk1 = _mm_set1_epi16(1); 
-
+			const __m128i vk1 = _mm_set1_epi16(1);
+			
+			__m128i supertot;
+			
+			
 			for (int i=0;i<cd->packunits;i++)
 			{
 				st_t *O = &cd->ostate[cd->memwidth * i];
@@ -680,12 +707,20 @@ namespace optimize
 				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
+
+				if ((i&3) == 0)
+				{
+					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+					if (_mm_cvtsi128_si32(supertot) > max)
+						return 100000;
+				}
 			}
 			
 			// here too
 			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4)); 
-			sum += _mm_cvtsi128_si32(grandtot);
+			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4));
+			sum += _mm_cvtsi128_si32(supertot);
 			
 			#else			
 			for (int i=0;i<cd->packunits;i++)
@@ -735,9 +770,9 @@ namespace optimize
 	}
 	
 	// source tree must have have been prepared on target_root with the edge to join
-	character::distance_t clip_merge_dist(network::data *d, int target_root, int t0, int t1)
+	character::distance_t clip_merge_dist(network::data *d, int target_root, int t0, int t1, int maxdist)
 	{
-		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, target_root, t0, t1);
+		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, target_root, t0, t1, maxdist);
 	}
 
 	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false, bool reoptimize = false)
