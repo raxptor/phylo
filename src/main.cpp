@@ -181,6 +181,7 @@ int main(int argc, const char **argv)
 				char *p = &tmpbuf[i][0];
 				network::sort(nw[i]);
 				network::to_string_2(nw[i], &p, 16000, 0);
+				*p = 0;
 			}
 				
 			for (int i=0;i<num;i++)
