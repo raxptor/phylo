@@ -334,7 +334,7 @@ namespace tbr
 				
 				network::insert(bisected, src1, src2, src_calc_root);
 				optimize::ultranode(bisected, src_calc_root);
-				optimize::optimize(bisected, src_calc_root, true);
+				optimize::reoptimize(bisected, src_calc_root);
 				network::disconnect(bisected, src_calc_root);
 				network::node_free(bisected, src_calc_root);
 				// now we erase and pretend it never happened

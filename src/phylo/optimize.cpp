@@ -11,7 +11,7 @@
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
 
-//#define USE_SIMD
+#define USE_SIMD
 
 namespace optimize
 {
@@ -20,9 +20,7 @@ namespace optimize
 		MAX_CHARACTERS = 1024
 	};
 	
-	enum {
-		BLOCKSIZE = 16 // do not change
-	};
+	#define BLOCKSIZE 16
 	
 	enum {
 		MAX_PACKUNITS = MAX_CHARACTERS / BLOCKSIZE
@@ -41,6 +39,10 @@ namespace optimize
 		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t weights[MAX_CHARACTERS] __attribute__ ((aligned(BLOCKSIZE)));
+		
+		//
+		st_t qs_pstate[MAX_PACKUNITS][BLOCKSIZE];
+		st_t qs_fstate[MAX_PACKUNITS][BLOCKSIZE];
 		bool block_needs_reopt[MAX_PACKUNITS];
 	};
 	
@@ -291,6 +293,8 @@ namespace optimize
 		taxp[0] = root;
 		taxp[1] = node[0];
 		
+		const int in_ofs = cd->memwidth * i;
+		
 		while (queue >= 0)
 		{
 			const int me = node[queue];
@@ -302,24 +306,35 @@ namespace optimize
 			const int blkKid1 = BLOCKSIZE * kid1;
 			
 			int *farray = &fin_ancestor[queue][0];
+			
+			st_t *FF = &cd->fstate[in_ofs];
+			st_t *PP = &cd->pstate[in_ofs];
+			
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
 				const int fa = farray[j];
-				F[blkMe + j] = fa & P[blkMe + j];
-
-				if (F[blkMe + j] != fa)
+				const int pp0 = PP[blkKid0];
+				const int pp1 = PP[blkKid1];
+				
+				int fme = PP[blkMe] & fa;
+				
+				if (fme != fa)
 				{
-					// change here
-					if (P[blkKid0 + j] & P[blkKid1 + j])
+					if (pp0 & pp1)
 					{
-						const int parent_share = (P[blkKid0 + j] | P[blkKid1 + j]) & fa;
-						F[blkMe + j] = parent_share | P[blkMe + j];
+						const int parent_share = (pp0 | pp1) & fa;
+						fme = parent_share | PP[blkMe];
 					}
 					else
 					{
-						F[blkMe + j] = P[blkMe + j] | fa;
+						fme = PP[blkMe] | fa;
 					}
 				}
+				
+				FF[blkMe] = fme;
+				
+				FF++;
+				PP++;
 			}
 							
 			queue--;
@@ -490,14 +505,11 @@ namespace optimize
 			bool nochange = true;
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
-				if (P[j] != F[j])
-				{
-					nochange = false;
-					break;
-				}
+				cd->qs_pstate[i][j] = P[j];
+				cd->qs_fstate[i][j] = F[j];
 			}
 			
-			cd->block_needs_reopt[i] = nochange; // nochange;
+			cd->block_needs_reopt[i] = true; // nochange; // nochange;
 		}
 	}
 	
@@ -718,14 +730,29 @@ namespace optimize
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
 		
 		const int sum0 = 0;// single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
-		
 
 		int sum1 = 0;
 		
 		for (int i=0;i<st->unordered.packunits;i++)
 		{
-//			if (reoptimize && !st->unordered.block_needs_reopt[i])
-//				continue;
+			if (reoptimize)
+			{
+				bool same = true;
+				for (int j=0;j<BLOCKSIZE;j++)
+				{
+					if (st->unordered.qs_fstate[i][j] /*root * BLOCKSIZE + j]*/ != st->unordered.qs_pstate[i][j])
+					{
+						same = false;
+						break;
+					}
+				}
+			
+				if (same)
+				{
+					continue;
+				}
+			}
+
 			sum1 += single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered, i);
 		}
 		
@@ -737,11 +764,26 @@ namespace optimize
 			DPRINT("Writing final values");
 			for (int i=0;i<st->unordered.packunits;i++)
 			{
-				if (reoptimize && !st->unordered.block_needs_reopt[i])
-					continue;
+				
+				if (reoptimize)
+				{
+					bool same = true;
+					for (int j=0;j<BLOCKSIZE;j++)
+					{
+						if (st->unordered.qs_fstate[i][j] /*root * BLOCKSIZE + j]*/ != st->unordered.qs_pstate[i][j])
+						{
+							same = false;
+							break;
+						}
+					}
+				
+					if (same)
+						continue;
+				}
 				single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered, i);
 			}
 		}
+		
 
 		// -- lala lala --
 		return sum;
