@@ -680,7 +680,6 @@ namespace optimize
 		{
 			target_root *= BLOCKSIZE;
 			t0 *= BLOCKSIZE;
-			t1 *= BLOCKSIZE;
 	
 			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();

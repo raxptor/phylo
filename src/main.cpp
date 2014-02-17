@@ -128,7 +128,7 @@ int main(int argc, const char **argv)
 
 	if (method && !strcmp(method, "ratchet"))
 	{
-		const int num = 1;
+		const int num = 4; // 1 best and 1 speculative (best will try ratchet differently, speculative will wander around)
 		network::data* nw[num];
 		for (int i=0;i<num;i++)
 			nw[i] = smart::make(mtx);
@@ -140,7 +140,7 @@ int main(int argc, const char **argv)
 		
 		std::cout << "Starting ratchet with random tree dist=" << out.length << std::endl;
 
-		for (int i=0;i<1000;i++)
+		for (int i=0;i<1000/num;i++)
 		{
 			int oc = out.equal_length.size();
 			
@@ -148,11 +148,13 @@ int main(int argc, const char **argv)
 			
 			for (int j=0;j<num;j++)
 			{
-				for (int k=0;k<40;k++)
+				for (int k=0;k<10;k++)
 				{
 					if (tbr::run(nw[j], &out))
 					{
-						network::copy(nw[j], out.best_network);
+						// keep the best in j=0 and let the others be speculative
+						if (j == 0)
+							network::copy(nw[j], out.best_network);
 					}
 					else
 					{
@@ -160,12 +162,6 @@ int main(int argc, const char **argv)
 					}
 				}
 			}
-
-			// eliminate dupes						
-			for (int i=0;i<num;i++)
-				for (int j=i+1;j<num;j++)
-					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
-						smart::make_inplace(nw[j]);
 
 			if (out.length < old)
 			{
@@ -179,10 +175,22 @@ int main(int argc, const char **argv)
 			}
 
 			// eliminate dupes						
+			char tmpbuf[num][16000];
 			for (int i=0;i<num;i++)
+			{
+				char *p = &tmpbuf[i][0];
+				network::sort(nw[i]);
+				network::to_string_2(nw[i], &p, 16000, 0);
+			}
+				
+			for (int i=0;i<num;i++)
+			{
 				for (int j=i+1;j<num;j++)
-					if (newick::from_network(nw[i], 0) == newick::from_network(nw[j], 0))
+				{
+					if (!strcmp(tmpbuf[i], tmpbuf[j]))
 						smart::make_inplace(nw[j]);
+				}
+			}
 					
 
 			if (oc != out.equal_length.size())
