@@ -171,7 +171,7 @@ namespace optimize
 	}
 	
 	void copy_cgroup(cgroup_data *target, cgroup_data *source)
-	{		
+	{
 		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
 		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
 		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
@@ -387,6 +387,21 @@ namespace optimize
 				
 		return 0;
 	}
+
+
+	void reopt_source_root(cgroup_data *cd, int root, int rootHTU, int i)
+	{
+		st_t *prow = &cd->pstate[cd->memwidth * i];
+		for (int j=0;j<BLOCKSIZE;j++)
+		{
+			int rv = prow[rootHTU*BLOCKSIZE+j] & 0xff; //prow[root*BLOCKSIZE+j];
+			if (!rv)
+			{
+				rv = prow[root*BLOCKSIZE+j];
+			}
+			prow[root*BLOCKSIZE+j] = rv;
+		}
+	}
 	
 	// Fitch single character first pass
 	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd, int i)
@@ -505,14 +520,17 @@ namespace optimize
 			st_t *P = &cd->pstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
 			st_t *F = &cd->fstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
 			
-			bool nochange = true;
+			bool needreopt = false;
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
-				cd->qs_pstate[i][j] = P[j];
-				cd->qs_fstate[i][j] = F[j];
+				if (P[j] != F[j])
+				{
+					needreopt = true;
+					break;
+				}
 			}
 			
-			cd->block_needs_reopt[i] = true; // nochange; // nochange;
+			cd->block_needs_reopt[i] = needreopt; // nochange;
 		}
 	}
 	
@@ -522,8 +540,6 @@ namespace optimize
 		for (int i=0;i<cd->packunits;i++)
 		{
 			memset(&cd->fstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
-			memset(&cd->ostate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
-			memset(&cd->pstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
 		}
 	}
 	
@@ -700,66 +716,52 @@ namespace optimize
 			network::make_traverse_order(d, root, st->first_pass_order, &root_htu);
 		}
 
-		// restore to starting value (this is for the root only maybe?)
-		for (int k=0;k<st->unordered.packunits;k++)
+
+		if (!reoptimize)
 		{
-			for (int j=0;;j++)
+			// Restore taxon nodes' pstate to o-state to properly deal with multistates.
+			//
+			// This is not needed when reoptimizing the source tree in TBR since those values
+			// will be kept (wouldn't change anyway if we actually did a first re-pass).
+			for (int k=0;k<st->unordered.packunits;k++)
 			{
-				int p = st->first_pass_order[j];
-				if (p == -1)
-					break;
-				
-				// The P values are fiddled with during computation, so restore all for all characters that are
-				// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
-				for (int a=0;a<BLOCKSIZE;a++)
+				for (int j=0;;j++)
 				{
-					const int ofs = k * st->unordered.memwidth + p * BLOCKSIZE + a;
-					st->unordered.pstate[ofs] = st->unordered.ostate[ofs];
-				}
-			}		
-			
-			// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
-			// node doesn't appear in the first_pass_order (because root has only 1 child)
-			for (int a=0;a<BLOCKSIZE;a++)	
-			{
-				const int ofs0 = k * st->unordered.memwidth + root * BLOCKSIZE + a;
-				const int ofs1 = k * st->unordered.memwidth + root_htu * BLOCKSIZE + a;
-				st->unordered.pstate[ofs0] = st->unordered.ostate[ofs0];
-				st->unordered.pstate[ofs1] = st->unordered.ostate[ofs1];
+					int p = st->first_pass_order[j];
+					if (p == -1)
+						break;
+					
+					// The P values are fiddled with during computation, so restore all for all characters that are
+					// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
+					const int ofs = k * st->unordered.memwidth + p * BLOCKSIZE;
+				
+					if (p < d->mtx_taxons)
+						memcpy(&st->unordered.pstate[ofs], &st->unordered.ostate[ofs], BLOCKSIZE);
+				}		
+				
+				// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
+				// node doesn't appear in the first_pass_order (because root has only 1 child)
+				const int ofs0 = k * st->unordered.memwidth + root * BLOCKSIZE;
+				const int ofs1 = k * st->unordered.memwidth + root_htu * BLOCKSIZE;
+				memcpy(&st->unordered.pstate[ofs0], &st->unordered.ostate[ofs0], BLOCKSIZE);
+				memcpy(&st->unordered.pstate[ofs1], &st->unordered.ostate[ofs1], BLOCKSIZE);
 			}
-		}
-		
+		} // end need-to-investigate block
 
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
 		
 		const int sum0 = 0;// single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
 
 		int sum1 = 0;
-		
-		for (int i=0;i<st->unordered.packunits;i++)
-		{
-			if (reoptimize)
-			{
-				bool same = true;
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					if (st->unordered.qs_fstate[i][j] /*root * BLOCKSIZE + j]*/ != st->unordered.qs_pstate[i][j])
-					{
-						same = false;
-						break;
-					}
-				}
-			
-				if (same)
-				{
-					continue;
-				}
-			}
 
-			sum1 += single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered, i);
+		if (!reoptimize)
+		{
+			for (int i=0;i<st->unordered.packunits;i++)
+				sum1 += single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered, i);
 		}
 		
 		const int sum = sum0 + sum1;
+		
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
 		
 		if (write_final)
@@ -767,22 +769,10 @@ namespace optimize
 			DPRINT("Writing final values");
 			for (int i=0;i<st->unordered.packunits;i++)
 			{
-				
-				if (reoptimize)
-				{
-					bool same = true;
-					for (int j=0;j<BLOCKSIZE;j++)
-					{
-						if (st->unordered.qs_fstate[i][j] /*root * BLOCKSIZE + j]*/ != st->unordered.qs_pstate[i][j])
-						{
-							same = false;
-							break;
-						}
-					}
-				
-					if (same)
+				// q-search shortcut.
+				if (reoptimize && !st->unordered.block_needs_reopt[i])
 						continue;
-				}
+				
 				single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered, i);
 			}
 		}

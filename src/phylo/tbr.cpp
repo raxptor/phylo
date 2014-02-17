@@ -337,6 +337,17 @@ namespace tbr
 				optimize::optimize(bisected, 0 , true);
 				optimize::qsearch_shortcut_setup(bisected, tmp.pairs[i+1]);
 				
+				// NOTE: We want to preserve the pstate data for the source tree from the previous calculations.
+				// Which is impossible since they don't change as long as we pick the src_calc_root so that the tree
+				// looks exactly the same. There is further speed-ups by having this calc root end up with exactly the 
+				// same node index as the HTU pairs[i+1] was (since it will have the computed data in there already).
+				//
+				// This way the reoptimization of the src_calc_root need not update any of the pstate data in the 
+				// source tree.
+				//
+				// It is important to understand all these little details when touching this code since changing
+				// even the smallest thing can break the optimizations.
+				
 				// make a virtual root here with the remaining allocatable nodes (big hack)
 				int src_calc_root = network::node_alloc(bisected);				
 				
@@ -345,10 +356,15 @@ namespace tbr
 				optimize::reoptimize(bisected, src_calc_root);
 				network::disconnect(bisected, src_calc_root);
 				network::node_free(bisected, src_calc_root);
+				
 				// now we erase and pretend it never happened
 
 				optimize::prepare_source_tree_root(bisected, src1, src2, tmpnode);
 				const int clipped_length = org_dist - optimize::clip_merge_dist(bisected, tmpnode, tgt1, tgt2);
+				
+				
+				DPRINT("S = " << tmp.pairs[i+1]);
+				DPRINT("src_calc_root = " << src_calc_root);
 				
 				//
 				roulette(bisected, org_dist, src, target, out, false, clipped_length, org_dist);
