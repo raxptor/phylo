@@ -16,7 +16,7 @@ namespace tbr
 	// This will recompute the results	
 	//
 	//#define CHECK_RESULTS
-	//#define CHECK_ALL_BEST
+	#define CHECK_ALL_BEST
 
 	enum
 	{
@@ -119,7 +119,7 @@ namespace tbr
 		if (clipped_length != length0+length1)
 		{
 			std::cout << "clipped length is faulty, clipped=" << clipped_length << " actual=" << length0+length1 << std::endl;
-			exit(1);
+//			exit(1);
 		}
 
 #endif
@@ -295,6 +295,9 @@ namespace tbr
 
 		DPRINT("tbr with " << tmp.count/2 << " edges to bisect, distance = " << org_dist);
 
+		int succ = 0;
+		int tot = 0;
+		
 		for (int i=0;i<tmp.count;i+=2)
 		{
 			if (tmp.pairs[i] >= d->mtx_taxons && tmp.pairs[i+1] >= d->mtx_taxons)
@@ -318,30 +321,23 @@ namespace tbr
 				network::the_two_others(optimized->network, tmp.pairs[i+1], tmp.pairs[i], &src1, &src2);
 
 				// STUPID: We do this stupid way now, just grab som edges and find a terminal				
-				network::edgelist dumb;
-				network::trace_edgelist(bisected, src, &dumb);
-				int src_calc_root = -1;
-				for (int i=0;i<dumb.count;i++)
-				{
-					if (dumb.pairs[i] < d->mtx_taxons)
-					{
-						src_calc_root = dumb.pairs[i];
-						break;
-					}
-				}
-					
-				if (src_calc_root < 0)
-				{
-					std::cerr << "dumb routine failed" << std::endl;
-					exit(1);
-				}
 				
 				// Need a calculation root in the source 
 				
 				int tmpnode = tmp.pairs[i]; // free now
 
-				int l1 = optimize::optimize(bisected, 0 , true);
-				int l2 = optimize::optimize(bisected, src_calc_root, true);
+				optimize::optimize(bisected, 0 , true);
+				optimize::qsearch_shortcut_setup(bisected, tmp.pairs[i+1]);
+				
+				// make a virtual root here with the remaining allocatable nodes (big hack)
+				int src_calc_root = network::node_alloc(bisected);				
+				
+				network::insert(bisected, src1, src2, src_calc_root);
+				optimize::ultranode(bisected, src_calc_root);
+				optimize::optimize(bisected, src_calc_root, true);
+				network::disconnect(bisected, src_calc_root);
+				network::node_free(bisected, src_calc_root);
+				// now we erase and pretend it never happened
 
 				optimize::prepare_source_tree_root(bisected, src1, src2, tmpnode);
 				const int clipped_length = org_dist - optimize::clip_merge_dist(bisected, tmpnode, tgt1, tgt2);
@@ -375,6 +371,7 @@ namespace tbr
 			}
 		}
 		
+//		std::cout << "Shortcut on " << succ << " out of " << tot << std::endl;
 		network::free(optimized);
 		network::free(bisected);
 		return out->length < org_dist;

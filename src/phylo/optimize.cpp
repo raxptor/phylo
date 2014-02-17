@@ -11,7 +11,7 @@
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
 
-#define USE_SIMD
+//#define USE_SIMD
 
 namespace optimize
 {
@@ -22,6 +22,10 @@ namespace optimize
 	
 	enum {
 		BLOCKSIZE = 16 // do not change
+	};
+	
+	enum {
+		MAX_PACKUNITS = MAX_CHARACTERS / BLOCKSIZE
 	};
 	
 	typedef unsigned char st_t;
@@ -37,6 +41,7 @@ namespace optimize
 		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t weights[MAX_CHARACTERS] __attribute__ ((aligned(BLOCKSIZE)));
+		bool block_needs_reopt[MAX_PACKUNITS];
 	};
 	
 	struct optstate
@@ -136,6 +141,11 @@ namespace optimize
 			std::cerr << "Bump MAX_CHARACTERS in optimize.cpp to at least " << source->count << std::endl;
 			exit(-1);
 		}
+		if (out->packunits > MAX_PACKUNITS)
+		{
+			std::cerr << "Check calculation of MAX_PACKUNITS in optimize.cpp" << std::endl;
+			exit(-1);
+		}
 
 		memset(out->ostate, 0x03, out->memwidth * out->packunits);
 		memset(out->pstate, 0x03, out->memwidth * out->packunits);
@@ -159,7 +169,7 @@ namespace optimize
 	}
 	
 	void copy_cgroup(cgroup_data *target, cgroup_data *source)
-	{
+	{		
 		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
 		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
 		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
@@ -253,7 +263,7 @@ namespace optimize
 	
 	
 	// Fitch single character final pass
-	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd)
+	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd, int i)
 	{
 		int queue;
 		int fin_ancestor[256][BLOCKSIZE];
@@ -261,220 +271,251 @@ namespace optimize
 		
 		DPRINT("Final pass from root [" << root << "] taxons=" << taxons);
 
-		for (int i=0;i<cd->packunits;i++)
+		st_t *F = &cd->fstate[cd->memwidth * i];
+		st_t *P = &cd->pstate[cd->memwidth * i];
+		
+		for (int j=0;j<BLOCKSIZE;j++)
+			fin_ancestor[0][j] = P[BLOCKSIZE * root + j];
+			
+		node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
+		if (node[0] < 0)
+			node[0] = net[root].c0;
+		
+		queue = 0; 
+		
+		DPRINT(" character(" << i << "), root=" << root << " fin_ancestor=" << (int)P[root]);
+		DPRINT(" first node=" << node[0]);
+		
+		int taxp[1024];
+		int taxp_count = 2; 
+		taxp[0] = root;
+		taxp[1] = node[0];
+		
+		while (queue >= 0)
 		{
-			st_t *F = &cd->fstate[cd->memwidth * i];
-			st_t *P = &cd->pstate[cd->memwidth * i];
+			const int me = node[queue];
+			const int kid0 = net[me].c1;
+			const int kid1 = net[me].c2;
 			
+			const int blkMe = BLOCKSIZE * me;
+			const int blkKid0 = BLOCKSIZE * kid0;
+			const int blkKid1 = BLOCKSIZE * kid1;
+			
+			int *farray = &fin_ancestor[queue][0];
 			for (int j=0;j<BLOCKSIZE;j++)
-				fin_ancestor[0][j] = P[BLOCKSIZE * root + j];
-				
-			node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
-			if (node[0] < 0)
-				node[0] = net[root].c0;
-			
-			queue = 0; 
-			
-			DPRINT(" character(" << i << "), root=" << root << " fin_ancestor=" << (int)P[root]);
-			DPRINT(" first node=" << node[0]);
-			
-			int taxp[1024];
-			int taxp_count = 2; 
-			taxp[0] = root;
-			taxp[1] = node[0];
-			
-			while (queue >= 0)
 			{
-				const int me = node[queue];
-				const int kid0 = net[me].c1;
-				const int kid1 = net[me].c2;
-				
-				const int blkMe = BLOCKSIZE * me;
-				const int blkKid0 = BLOCKSIZE * kid0;
-				const int blkKid1 = BLOCKSIZE * kid1;
-				
-				int *farray = &fin_ancestor[queue][0];
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					const int fa = farray[j];
-					F[blkMe + j] = fa & P[blkMe + j];
+				const int fa = farray[j];
+				F[blkMe + j] = fa & P[blkMe + j];
 
-					if (F[blkMe + j] != fa)
+				if (F[blkMe + j] != fa)
+				{
+					// change here
+					if (P[blkKid0 + j] & P[blkKid1 + j])
 					{
-						// change here
-						if (P[blkKid0 + j] & P[blkKid1 + j])
-						{
-							const int parent_share = (P[blkKid0 + j] | P[blkKid1 + j]) & fa;
-							F[blkMe + j] = parent_share | P[blkMe + j];
-						}
-						else
-						{
-							F[blkMe + j] = P[blkMe + j] | fa;
-						}
+						const int parent_share = (P[blkKid0 + j] | P[blkKid1 + j]) & fa;
+						F[blkMe + j] = parent_share | P[blkMe + j];
+					}
+					else
+					{
+						F[blkMe + j] = P[blkMe + j] | fa;
 					}
 				}
-								
-				queue--;
-				
-				if (kid0 >= taxons)
-				{
-					queue++;
-					for (int j=0;j<BLOCKSIZE;j++)
-						fin_ancestor[queue][j] = F[blkMe + j];
-					node[queue] = kid0;
-				}
-				else if (kid0 >= 0)
-				{
-					taxp[taxp_count] = kid0;				
-					taxp[taxp_count+1] = me;
-					taxp_count += 2;
-				}
-				if (kid1 >= taxons)
-				{
-					queue++;
-					for (int j=0;j<BLOCKSIZE;j++)
-						fin_ancestor[queue][j] = F[blkMe + j];
-					node[queue] = kid1;
-				}
-				else if (kid1 >= 0)
-				{
-					taxp[taxp_count] = kid1;
-					taxp[taxp_count+1] = me;
-					taxp_count += 2;
-				}
 			}
+							
+			queue--;
 			
-			// Need to treat terminal nodes specially when they can have ? in them
-			for (int A=0;A<taxp_count;A+=2)
+			if (kid0 >= taxons)
 			{
-				const int r = BLOCKSIZE * taxp[A];
-				const int p = BLOCKSIZE * taxp[A+1];
-
+				queue++;
 				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					int f_root = P[r + j] & F[p + j];
-					if (!f_root)
-						f_root = P[r + j];
-					F[r + j] = f_root;
-				}
+					fin_ancestor[queue][j] = F[blkMe + j];
+				node[queue] = kid0;
+			}
+			else if (kid0 >= 0)
+			{
+				taxp[taxp_count] = kid0;				
+				taxp[taxp_count+1] = me;
+				taxp_count += 2;
+			}
+			if (kid1 >= taxons)
+			{
+				queue++;
+				for (int j=0;j<BLOCKSIZE;j++)
+					fin_ancestor[queue][j] = F[blkMe + j];
+				node[queue] = kid1;
+			}
+			else if (kid1 >= 0)
+			{
+				taxp[taxp_count] = kid1;
+				taxp[taxp_count+1] = me;
+				taxp_count += 2;
 			}
 		}
 		
+		// Need to treat terminal nodes specially when they can have ? in them
+		for (int A=0;A<taxp_count;A+=2)
+		{
+			const int r = BLOCKSIZE * taxp[A];
+			const int p = BLOCKSIZE * taxp[A+1];
+
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				int f_root = P[r + j] & F[p + j];
+				if (!f_root)
+					f_root = P[r + j];
+				F[r + j] = f_root;
+			}
+		}
+				
 		return 0;
 	}
 	
 	// Fitch single character first pass
-	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
+	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd, int i)
 	{
 		int sum = 0;
+		const int *bp = fpo;
+		
+		// offset to the right row into the submatrix table
+		st_t *prow = &cd->pstate[cd->memwidth * i];
+		
+		#if defined(USE_SIMD)
+		
+			__m128i grandtot = _mm_setzero_si128();
+			__m128i zero = _mm_setzero_si128();
+			__m128i cmp = _mm_setzero_si128();
 
+			int n = bp[0];
+			int c1 = bp[1];
+			int c2 = bp[2];
+							
+			while (n != -1)
+			{
+				__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
+				__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
+				
+				c1 = bp[3+1];
+				c2 = bp[3+2];
+				const int resaddr = n*BLOCKSIZE;
+				
+				// interleaved here, cmp starts out at z for the first round
+				// and one extra at exit
+				grandtot = _mm_add_epi8(grandtot, cmp);
+			
+				__m128i v = _mm_and_si128(a, b);
+				
+				cmp = _mm_cmpeq_epi8(v, zero);
+				
+				__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
+				__m128i alt2 = _mm_andnot_si128(cmp, v);
+				__m128i res = _mm_or_si128(alt1, alt2);
+				_mm_store_si128((__m128i*)&prow[resaddr], res);
 
+				n = bp[3];
+				bp += 3;
+			}
+
+			grandtot = _mm_add_epi8(grandtot, cmp);
+			
+			signed char tmp[BLOCKSIZE];
+			_mm_storeu_si128((__m128i*)tmp, grandtot);
+		
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
+				if (!rv)
+				{
+					rv = prow[root*BLOCKSIZE+j];
+					tmp[j]--;
+				}
+				prow[root*BLOCKSIZE+j] = rv;
+				sum -= tmp[j] * cd->weights[i * BLOCKSIZE + j];
+			}			
+			
+		#else
+
+			int subsum[BLOCKSIZE] = {0};
+
+			while (bp[0] != -1)
+			{
+				const int n  = bp[0];
+				const int c1 = bp[1];
+				const int c2 = bp[2];
+				
+				for (int j=0;j<BLOCKSIZE;j++)
+				{
+					const int a = prow[c1*BLOCKSIZE+j];
+					const int b = prow[c2*BLOCKSIZE+j];
+				
+					int v = a & b;
+					if (!v)
+					{
+						v = a | b;
+						++subsum[j];
+					}
+					
+					prow[n*BLOCKSIZE+j] = v;
+				}
+				
+				bp += 3;
+			}
+			
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
+				if (!rv)
+				{
+					rv = prow[root*BLOCKSIZE+j];
+					++subsum[j];
+					DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
+				}
+				prow[root*BLOCKSIZE+j] = rv;
+				sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
+			}
+		
+		#endif
+		return sum;
+	}
+
+	// If P & F are the same 
+	void qsearch_shortcut(cgroup_data *cd, int source_clip_node)
+	{
+		int s=0, f=0;
+		
 		for (int i=0;i<cd->packunits;i++)
 		{
-			const int *bp = fpo;
+			st_t *P = &cd->pstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
+			st_t *F = &cd->fstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
 			
-			// offset to the right row into the submatrix table
-			st_t *prow = &cd->pstate[cd->memwidth * i];
-			
-			#if defined(USE_SIMD)
-			
-				__m128i grandtot = _mm_setzero_si128();
-				__m128i zero = _mm_setzero_si128();
-				__m128i cmp = _mm_setzero_si128();
-
-				int n = bp[0];
-				int c1 = bp[1];
-				int c2 = bp[2];
-								
-				while (n != -1)
+			bool nochange = true;
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				if (P[j] != F[j])
 				{
-					__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
-					__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
-					
-					c1 = bp[3+1];
-					c2 = bp[3+2];
-					const int resaddr = n*BLOCKSIZE;
-					
-					// interleaved here, cmp starts out at z for the first round
-					// and one extra at exit
-					grandtot = _mm_add_epi8(grandtot, cmp);
-				
-					__m128i v = _mm_and_si128(a, b);
-					
-					cmp = _mm_cmpeq_epi8(v, zero);
-					
-					__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
-					__m128i alt2 = _mm_andnot_si128(cmp, v);
-					__m128i res = _mm_or_si128(alt1, alt2);
-					_mm_store_si128((__m128i*)&prow[resaddr], res);
-
-					n = bp[3];
-					bp += 3;
+					nochange = false;
+					break;
 				}
-
-				grandtot = _mm_add_epi8(grandtot, cmp);
-				
-				signed char tmp[BLOCKSIZE];
-				_mm_storeu_si128((__m128i*)tmp, grandtot);
+			}
 			
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-					if (!rv)
-					{
-						rv = prow[root*BLOCKSIZE+j];
-						tmp[j]--;
-					}
-					prow[root*BLOCKSIZE+j] = rv;
-					sum -= tmp[j] * cd->weights[i * BLOCKSIZE + j];
-				}			
-				
-			#else
-
-				int subsum[BLOCKSIZE] = {0};
-
-				while (bp[0] != -1)
-				{
-					const int n  = bp[0];
-					const int c1 = bp[1];
-					const int c2 = bp[2];
-					
-					for (int j=0;j<BLOCKSIZE;j++)
-					{
-						const int a = prow[c1*BLOCKSIZE+j];
-						const int b = prow[c2*BLOCKSIZE+j];
-					
-						int v = a & b;
-						if (!v)
-						{
-							v = a | b;
-							++subsum[j];
-						}
-						
-						prow[n*BLOCKSIZE+j] = v;
-					}
-					
-					bp += 3;
-				}
-				
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-					if (!rv)
-					{
-						rv = prow[root*BLOCKSIZE+j];
-						++subsum[j];
-						DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
-					}
-					prow[root*BLOCKSIZE+j] = rv;
-					sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
-				}
-			
-			#endif
+			cd->block_needs_reopt[i] = nochange; // nochange;
 		}
-		
-		
-		return sum;
+	}
+	
+	void ultranode(network::data *d, int node)
+	{
+		cgroup_data *cd = &d->opt->unordered;
+		for (int i=0;i<cd->packunits;i++)
+		{
+			memset(&cd->fstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
+			memset(&cd->ostate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
+			memset(&cd->pstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
+		}
+	}
+	
+	void qsearch_shortcut_setup(network::data *d, int source_clip_node)
+	{
+		qsearch_shortcut(&d->opt->unordered, source_clip_node);
+		qsearch_shortcut(&d->opt->ordered, source_clip_node);
 	}
 	
 	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1)
@@ -623,10 +664,10 @@ namespace optimize
 		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, target_root, t0, t1);
 	}
 
-	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false)
+	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false, bool reoptimize = false)
 	{
 		st->root = root;
-		
+
 		int root_htu;
 		
 		if (write_final)
@@ -677,16 +718,29 @@ namespace optimize
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
 		
 		const int sum0 = 0;// single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
-		const int sum1 = single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered);
+		
+
+		int sum1 = 0;
+		
+		for (int i=0;i<st->unordered.packunits;i++)
+		{
+//			if (reoptimize && !st->unordered.block_needs_reopt[i])
+//				continue;
+			sum1 += single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered, i);
+		}
+		
 		const int sum = sum0 + sum1;
-
-
 		DPRINT("Optimized sum = " << sum0 << "+" << sum1 << "=" << sum);
 		
 		if (write_final)
 		{
 			DPRINT("Writing final values");
-			single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered);
+			for (int i=0;i<st->unordered.packunits;i++)
+			{
+				if (reoptimize && !st->unordered.block_needs_reopt[i])
+					continue;
+				single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered, i);
+			}
 		}
 
 		// -- lala lala --
@@ -713,10 +767,15 @@ namespace optimize
 		delete s;
 	}
 		
+	character::distance_t reoptimize(network::data *data, int root)
+	{
+		return optimize_for_tree(data->opt, data, root, true, true);
+	}
+		
 	character::distance_t optimize(network::data *data, int root, bool write_final)
 	{
 		DPRINT("[optimize] - First pass run to calculate length");
-		return optimize_for_tree(data->opt, data, root, write_final);
+		return optimize_for_tree(data->opt, data, root, write_final, false);
 	}
 
 	void copy(optstate *target, optstate *source)

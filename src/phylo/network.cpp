@@ -186,20 +186,10 @@ namespace network
 
 		net[n].c2 = which;
 		
-		if (which < d->mtx_taxons)
-		{
-			// this will be leaf node
-			net[which].c0 = n;
-			net[which].c1 = NOT_IN_NETWORK;
-			net[which].c2 = NOT_IN_NETWORK;
-		}
-		else
-		{
-			DPRINT("     (inserting subtree)");
-			
-			// must have all the remaining connection at c1, c2
-			net[which].c0 = n;
-		}
+		// this will be leaf node
+		net[which].c0 = n;
+		net[which].c1 = NOT_IN_NETWORK;
+		net[which].c2 = NOT_IN_NETWORK;
 
 		return n;
 	}
@@ -343,7 +333,7 @@ namespace network
 			--queue;
 			
 			// only HTU & root
-			if (cur >= data->mtx_taxons)
+			if (cur != root && cur >= data->mtx_taxons)
 			{
 				tmpOrder[tmpOrderOut++] = cur;
 				if (net[cur].c0 != src)
@@ -369,7 +359,7 @@ namespace network
 				}
 			}
 		}
-
+		
 		// reverse it		
 		for (int i=0;i<tmpOrderOut;i+=3)
 		{
@@ -518,7 +508,7 @@ namespace network
 			--queue;
 			
 			// only HTU & root
-			if (cur >= data->mtx_taxons)
+			if (cur != root && cur >= data->mtx_taxons) 
 			{
 				tmpOrder[tmpOrderOut++] = cur;
 				if (net[cur].c0 != src)

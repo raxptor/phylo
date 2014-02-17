@@ -17,13 +17,18 @@ namespace optimize
 	
 	// returns new distance
 	character::distance_t optimize(network::data *data, int root=0, bool write_final=false);
+	character::distance_t reoptimize(network::data *data, int root);
+	;
 	character::distance_t clip_merge_dist(network::data *d, int t0, int t1, int s0, int s1);
+	
+	void qsearch_shortcut_setup(network::data *d, int source_clip_node);
 
 	// TBR utilitiy functions
 	void prepare_source_tree_root(network::data *d, int s0, int s1, int new_node);
 	character::distance_t clip_merge_dist(network::data *d, int source_root, int t0, int t1);
 	
 	void set_weight(optstate *st, int pos, int weight);
+	void ultranode(network::data *d, int node);
 }
 
 #endif
