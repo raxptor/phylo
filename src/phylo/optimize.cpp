@@ -311,35 +311,63 @@ namespace optimize
 			st_t *FF = &cd->fstate[in_ofs];
 			st_t *PP = &cd->pstate[in_ofs];
 			
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				const int fa = FF[blkAncestor];
-				const int pp0 = PP[blkKid0];
-				const int pp1 = PP[blkKid1];
-				const int ppMe = PP[blkMe];
-				const int parent_share = (pp0 | pp1) & fa;
+			#if defined(USE_SIMD)
+				__m128i zero = _mm_setzero_si128();
+						
+				__m128i fa = _mm_load_si128((__m128i*)&FF[blkAncestor]);
+				__m128i pp0 = _mm_load_si128((__m128i*)&PP[blkKid0]);
+				__m128i pp1 = _mm_load_si128((__m128i*)&PP[blkKid1]);
+				__m128i ppMe = _mm_load_si128((__m128i*)&PP[blkMe]);
+				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
 				
-				const int subopt1 = ppMe | parent_share;
-				const int subopt2 = ppMe | fa;
-				int fme = ppMe & fa;
+				__m128i subopt1 = _mm_or_si128(ppMe, parent_share);
+				__m128i subopt2 = _mm_or_si128(ppMe, fa);
+				__m128i fme = _mm_and_si128(ppMe, fa);
+
+				__m128i cmpOuter = _mm_cmpeq_epi8(fme, fa);
+				__m128i cmpInner = _mm_cmpeq_epi8(_mm_and_si128(pp0, pp1), zero);
 				
-				if (fme != fa)
+				// result of inner statement
+				__m128i innerResult = _mm_or_si128(_mm_andnot_si128(cmpInner, subopt1),
+				                                   _mm_and_si128(cmpInner, subopt2));
+	
+				__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmpOuter, innerResult),
+									     _mm_and_si128(cmpOuter, fme));
+			
+				_mm_store_si128((__m128i*)&FF[blkMe], totalResult);
+
+
+			#else
+				for (int j=0;j<BLOCKSIZE;j++)
 				{
-					if (pp0 & pp1)
+					const int fa = FF[blkAncestor];
+					const int pp0 = PP[blkKid0];
+					const int pp1 = PP[blkKid1];
+					const int ppMe = PP[blkMe];
+					const int parent_share = (pp0 | pp1) & fa;
+					
+					const int subopt1 = ppMe | parent_share;
+					const int subopt2 = ppMe | fa;
+					int fme = ppMe & fa;
+					
+					if (fme != fa)
 					{
-						fme = subopt1;
+						if (pp0 & pp1)
+						{
+							fme = subopt1;
+						}
+						else
+						{
+							fme = subopt2;
+						}
 					}
-					else
-					{
-						fme = subopt2;
-					}
+					
+					FF[blkMe] = fme;
+					
+					FF++;
+					PP++;
 				}
-				
-				FF[blkMe] = fme;
-				
-				FF++;
-				PP++;
-			}
+			#endif
 							
 			queue--;
 			
@@ -375,6 +403,18 @@ namespace optimize
 			const int r = BLOCKSIZE * taxp[A];
 			const int p = BLOCKSIZE * taxp[A+1];
 
+#if defined(USE_SIMD)
+			__m128i zero = _mm_setzero_si128();
+	
+			__m128i PR = _mm_load_si128((__m128i*)&P[r]);
+			__m128i FP = _mm_load_si128((__m128i*)&F[p]);
+			__m128i f_root = _mm_and_si128(PR, FP);
+			__m128i cmp = _mm_cmpeq_epi8(f_root, zero);
+			__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
+								     _mm_and_si128(cmp, PR));
+			_mm_store_si128((__m128i*)&F[r], totalResult);
+
+#else
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
 				int f_root = P[r + j] & F[p + j];
@@ -386,6 +426,8 @@ namespace optimize
 				// final values here
 				F[r + j] = f_root;
 			}
+#endif
+
 		}
 				
 		return 0;
