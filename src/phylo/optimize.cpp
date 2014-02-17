@@ -794,10 +794,13 @@ namespace optimize
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
 				
-				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-				if (_mm_cvtsi128_si32(supertot) > max)
-					return 100000;
+				if ((i & 5) == 5)
+				{
+					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+					if (_mm_cvtsi128_si32(supertot) > max)
+						return 100000;
+				}
 			}
 			
 			// and super sum
