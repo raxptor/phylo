@@ -23,7 +23,7 @@ namespace ratchet
 
 		const int old = out->length;
 		
-		network::data *new_net = network::alloc(d->matrix);
+		network::data *new_net = network::alloc(d->matrix, true);
 		network::copy(new_net, d);
 
 		int nw = 10;
@@ -42,7 +42,7 @@ namespace ratchet
 		// networks as final		
 
 		tbr::output tout;
-		tout.best_network = network::alloc(d->matrix);
+		tout.best_network = network::alloc(d->matrix, true);
 		tout.length = 1000000;
 		network::copy(tout.best_network, new_net);
 
