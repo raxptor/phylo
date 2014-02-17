@@ -8,6 +8,9 @@
 #include <mtw/mersenne-twister.h>
 #include <cstdlib>
 
+// abort after this many
+long long g_treeTiming = 10000000000;
+
 namespace tbr
 {	
 	//#define DPRINT(x) { std::cout << x << std::endl; }
@@ -29,6 +32,11 @@ namespace tbr
 	{
 		if (++networks % 1000000 == 0)
 			std::cout << "[tbr] - searched " << (networks/1000000) << "M networks.." << std::endl;
+		if (networks == g_treeTiming)
+		{
+			std::cout << "Timing done complete, processed " << networks << " networks." << std::endl;
+			exit(0);
+		}
 	}
 	
 	void bisect(network::data *d, network::idx_t n0, network::idx_t n1, network::idx_t *s0, network::idx_t *s1)

@@ -16,13 +16,17 @@
 #include <mtw/mersenne-twister.h>
 #include <fstream>
 
+extern long long g_treeTiming;
+
 void help()
 {
 	std::cout << "Run: phylo [args] matrix-file" << std::endl; 
 	std::cout << "--seed <seed>  - Specify random seed" << std::endl;
 	std::cout << "--run <method> - Run analysis with method [bruteforce, ratchet]" << std::endl;
 	std::cout << "--print <what> - Print [matrix]" << std::endl;
+	std::cout << "--timing <MTrees> - stop after specified number million trees" << std::endl;
 	std::cout << std::endl;
+	
 	exit(0);
 }
 
@@ -61,7 +65,13 @@ int main(int argc, const char **argv)
 			print = argv[c+1];
 			c++;
 		}
+		else if (!strcmp(argv[c], "--timing"))
+		{
+			g_treeTiming = atoi(argv[c+1])*1000000;
+			c++;
+		}
 	}
+	
 	
 	if (!strcmp(argv[c], "--help"))
 	{
