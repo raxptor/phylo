@@ -39,11 +39,6 @@ namespace optimize
 		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t weights[MAX_CHARACTERS] __attribute__ ((aligned(BLOCKSIZE)));
-		
-		//
-		st_t qs_pstate[MAX_PACKUNITS][BLOCKSIZE];
-		st_t qs_fstate[MAX_PACKUNITS][BLOCKSIZE];
-		bool block_needs_reopt[MAX_PACKUNITS];
 	};
 	
 	struct optstate
@@ -519,7 +514,7 @@ namespace optimize
 				_mm_store_si128((__m128i*)&F[blkMe], totalResult);
 
 				__m128i fref = _mm_load_si128((__m128i*)&FREF[blkMe]);
-				__m128i vcmp = _mm_cmpeq_ps(fref, totalResult);
+				__m128i vcmp = (__m128i)_mm_cmpeq_ps((__m128)fref, (__m128)totalResult);
 				
 				if ( _mm_movemask_epi8(vcmp) == 0xffff)
 				{
@@ -716,28 +711,6 @@ namespace optimize
 		return sum;
 	}
 
-	// If P & F are the same 
-	void qsearch_shortcut(cgroup_data *cd, int source_clip_node)
-	{
-		for (int i=0;i<cd->packunits;i++)
-		{
-			st_t *P = &cd->pstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
-			st_t *F = &cd->fstate[cd->memwidth * i + BLOCKSIZE * source_clip_node];
-			
-			bool needreopt = false;
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				if (P[j] != F[j])
-				{
-					needreopt = true;
-					break;
-				}
-			}
-			
-			cd->block_needs_reopt[i] = needreopt; // nochange;
-		}
-	}
-	
 	void ultranode(network::data *d, int node)
 	{
 		cgroup_data *cd = &d->opt->unordered;
@@ -745,12 +718,6 @@ namespace optimize
 		{
 			memset(&cd->fstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
 		}
-	}
-	
-	void qsearch_shortcut_setup(network::data *d, int source_clip_node)
-	{
-		qsearch_shortcut(&d->opt->unordered, source_clip_node);
-		qsearch_shortcut(&d->opt->ordered, source_clip_node);
 	}
 	
 	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1, int max)
@@ -1008,13 +975,8 @@ namespace optimize
 		
 		if (write_final)
 		{
-			DPRINT("Writing final values");
 			for (int i=0;i<st->unordered.packunits;i++)
 			{
-				// q-search shortcut.
-				if (reoptimize && !st->unordered.block_needs_reopt[i])
-						continue;
-				
 				single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered, i);
 			}
 		}
@@ -1028,8 +990,7 @@ namespace optimize
 	{
 		network::treeify(data, root, ref->opt->net, ref->opt->first_pass_order);
 		for (int i=0;i<ref->opt->unordered.packunits;i++)
-			if (data->opt->unordered.block_needs_reopt[i])
-				final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
+			final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
 				
 		return 0;
 	}

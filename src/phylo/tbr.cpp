@@ -19,7 +19,7 @@ namespace tbr
 	// This will recompute the results	
 	//
 	//#define CHECK_RESULTS
-	#define CHECK_ALL_BEST
+	//#define CHECK_ALL_BEST
 
 	enum
 	{
@@ -338,7 +338,6 @@ namespace tbr
 				int tmpnode = tmp.pairs[i]; // free now
 
 				optimize::optimize(bisected, 0 , true);
-				optimize::qsearch_shortcut_setup(bisected, tmp.pairs[i+1]);
 				
 				// NOTE: We want to preserve the pstate data for the source tree from the previous calculations.
 				// Which is impossible since they don't change as long as we pick the src_calc_root so that the tree
