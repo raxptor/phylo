@@ -107,7 +107,16 @@ namespace optimize
 	{
 		return num_units(count) * BLOCKSIZE;
 	}
-	
+
+	struct tmpsort
+	{
+		int val;
+		int idx;
+		bool operator<(const tmpsort &b) const
+		{
+			return val < b.val;
+		} 
+	};	
 	
 	// Converts the values in the matrix into bit forms like this
 	//
@@ -443,6 +452,148 @@ namespace optimize
 		return 0;
 	}
 
+	// Fitch single character final pass
+	int final_state_reoptimization(int root, int taxons, network::node *net, cgroup_data *cd, cgroup_data *ref, int i)
+	{
+		int queue;
+		int ancestor[1024];
+		int node[1024];
+		
+		st_t *F = &cd->fstate[cd->memwidth * i];
+		st_t *P = &cd->pstate[cd->memwidth * i];
+		st_t *FREF = &ref->fstate[cd->memwidth * i];
+		
+		for (int j=0;j<BLOCKSIZE;j++)
+			F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
+			
+		ancestor[0] = root;
+		node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
+		if (node[0] < 0)
+			node[0] = net[root].c0;
+		
+		queue = 0; 
+
+		int taxp[1024];
+		int taxp_count = 2; 
+		taxp[0] = root;
+		taxp[1] = node[0];
+	
+		while (queue >= 0)
+		{
+			const int me = node[queue];
+			const int anc = ancestor[queue];
+		
+			const int blkAncestor = BLOCKSIZE * anc;
+			const int blkMe = BLOCKSIZE * me;
+			
+			const int kid0 = net[me].c1;
+			const int kid1 = net[me].c2;
+			
+			const int blkKid0 = BLOCKSIZE * kid0;
+			const int blkKid1 = BLOCKSIZE * kid1;
+			
+			#if defined(USE_SIMD)
+			
+				__m128i ppMe = _mm_load_si128((__m128i*)&P[blkMe]);
+				__m128i fa = _mm_load_si128((__m128i*)&F[blkAncestor]);
+				__m128i pp0 = _mm_load_si128((__m128i*)&P[blkKid0]);
+				__m128i pp1 = _mm_load_si128((__m128i*)&P[blkKid1]);
+				__m128i fme = _mm_and_si128(ppMe, fa);
+
+				__m128i cmpOuter = _mm_cmpeq_epi8(fme, fa);
+				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
+				
+				__m128i zero = _mm_setzero_si128();
+				__m128i cmpInner = _mm_cmpeq_epi8(_mm_and_si128(pp0, pp1), zero);
+
+				__m128i subopt1 = _mm_or_si128(ppMe, parent_share);
+				__m128i subopt2 = _mm_or_si128(ppMe, fa);
+				
+				// result of inner statement
+				__m128i innerResult = _mm_or_si128(_mm_andnot_si128(cmpInner, subopt1),
+				                                   _mm_and_si128(cmpInner, subopt2));
+	
+				__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmpOuter, innerResult),
+									     _mm_and_si128(cmpOuter, fme));
+			
+				_mm_store_si128((__m128i*)&F[blkMe], totalResult);
+
+				__m128i fref = _mm_load_si128((__m128i*)&FREF[blkMe]);
+				__m128i vcmp = _mm_cmpeq_ps(fref, totalResult);
+				
+				if ( _mm_movemask_epi8(vcmp) == 0xffff)
+				{
+					--queue;
+					continue;
+				}
+			#endif
+
+			// Add kids			
+			queue--;
+
+			if (kid0 >= taxons)
+			{
+				queue++;
+				ancestor[queue] = me;
+				node[queue] = kid0;
+			}
+			else if (kid0 >= 0)
+			{
+				taxp[taxp_count] = kid0;				
+				taxp[taxp_count+1] = me;
+				taxp_count += 2;
+			}
+			if (kid1 >= taxons)
+			{
+				queue++;
+				ancestor[queue] = me;
+				node[queue] = kid1;
+			}
+			else if (kid1 >= 0)
+			{
+				taxp[taxp_count] = kid1;
+				taxp[taxp_count+1] = me;
+				taxp_count += 2;
+			}
+		}
+		
+		// Need to treat terminal nodes specially when they can have ? in them
+		for (int A=0;A<taxp_count;A+=2)
+		{
+			const int r = BLOCKSIZE * taxp[A];
+			const int p = BLOCKSIZE * taxp[A+1];
+
+#if defined(USE_SIMD)
+			__m128i zero = _mm_setzero_si128();
+	
+			__m128i PR = _mm_load_si128((__m128i*)&P[r]);
+			__m128i FP = _mm_load_si128((__m128i*)&F[p]);
+			__m128i f_root = _mm_and_si128(PR, FP);
+			__m128i cmp = _mm_cmpeq_epi8(f_root, zero);
+			__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
+								     _mm_and_si128(cmp, PR));
+			_mm_store_si128((__m128i*)&F[r], totalResult);
+
+#else
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				int f_root = P[r + j] & F[p + j];
+				if (!f_root)
+					f_root = P[r + j];
+					
+				// these give the multi-state characters their final values
+				// at least for now this is how those ? are treated, they get
+				// final values here
+				F[r + j] = f_root;
+			}
+#endif
+
+		}
+				
+		return 0;
+	}
+
+
 
 	void reopt_source_root(cgroup_data *cd, int root, int rootHTU, int i)
 	{
@@ -609,11 +760,9 @@ namespace optimize
 		// for all characters in this group
 		if (t1 != network::NOT_IN_NETWORK)
 		{
-		
 			target_root *= BLOCKSIZE;
 			t0 *= BLOCKSIZE;
 			t1 *= BLOCKSIZE;
-
 
 			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
@@ -644,14 +793,11 @@ namespace optimize
 				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
-								
-				if ((i&3) == 1)
-				{
-					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-					if (_mm_cvtsi128_si32(supertot) > max)
-						return 100000;
-				}
+				
+				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+				if (_mm_cvtsi128_si32(supertot) > max)
+					return 100000;
 			}
 			
 			// and super sum
@@ -815,15 +961,29 @@ namespace optimize
 					const int ofs = k * st->unordered.memwidth + p * BLOCKSIZE;
 				
 					if (p < d->mtx_taxons)
+					{	
+					#if defined(USE_SIMD)
+						__m128i tmp = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs]);
+						_mm_store_si128((__m128i*)&st->unordered.pstate[ofs], tmp);
+					#else		
 						memcpy(&st->unordered.pstate[ofs], &st->unordered.ostate[ofs], BLOCKSIZE);
+					#endif
+					}
 				}		
 				
 				// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
 				// node doesn't appear in the first_pass_order (because root has only 1 child)
 				const int ofs0 = k * st->unordered.memwidth + root * BLOCKSIZE;
 				const int ofs1 = k * st->unordered.memwidth + root_htu * BLOCKSIZE;
-				memcpy(&st->unordered.pstate[ofs0], &st->unordered.ostate[ofs0], BLOCKSIZE);
-				memcpy(&st->unordered.pstate[ofs1], &st->unordered.ostate[ofs1], BLOCKSIZE);
+				#if defined(USE_SIMD)
+					__m128i tmp0 = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs0]);
+					__m128i tmp1 = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs1]);
+					_mm_store_si128((__m128i*)&st->unordered.pstate[ofs0], tmp0);
+					_mm_store_si128((__m128i*)&st->unordered.pstate[ofs1], tmp1);
+				#else
+					memcpy(&st->unordered.pstate[ofs0], &st->unordered.ostate[ofs0], BLOCKSIZE);
+					memcpy(&st->unordered.pstate[ofs1], &st->unordered.ostate[ofs1], BLOCKSIZE);
+				#endif
 			}
 		} // end need-to-investigate block
 
@@ -860,6 +1020,16 @@ namespace optimize
 		// -- lala lala --
 		return sum;
 	}
+
+	character::distance_t reoptimize_final(network::data *data, network::data *ref, int root)	
+	{
+		network::treeify(data, root, ref->opt->net, ref->opt->first_pass_order);
+		for (int i=0;i<ref->opt->unordered.packunits;i++)
+			if (data->opt->unordered.block_needs_reopt[i])
+				final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
+				
+		return 0;
+	}
 	
 	void set_weight(optstate *st, int pos, int weight)
 	{
@@ -881,15 +1051,11 @@ namespace optimize
 		delete s;
 	}
 		
-	character::distance_t reoptimize(network::data *data, int root)
-	{
-		return optimize_for_tree(data->opt, data, root, true, true);
-	}
 		
 	character::distance_t optimize(network::data *data, int root, bool write_final)
 	{
 		DPRINT("[optimize] - First pass run to calculate length");
-		return optimize_for_tree(data->opt, data, root, write_final, false);
+		return optimize_for_tree(data->opt, data, root, write_final, 0);
 	}
 
 	void copy(optstate *target, optstate *source)

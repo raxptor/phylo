@@ -142,7 +142,7 @@ int main(int argc, const char **argv)
 
 		int maxnew = 10;
 		
-		for (int i=0;i<1000/num;i++)
+		for (int i=0;i<10000/num;i++)
 		{
 			int oc = out.equal_length.size();
 			

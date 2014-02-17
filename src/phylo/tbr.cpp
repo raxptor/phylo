@@ -149,7 +149,6 @@ namespace tbr
 			DPRINT("Prep source tree " << _a0 << " and " << _a1 << " to " << a);
 			optimize::prepare_source_tree_root(d, _a0, _a1, a);
 
-
 			for (int j=0;j<net1.count;j+=2)
 			{
 				const network::idx_t _b0 = net1.pairs[j];
@@ -161,6 +160,12 @@ namespace tbr
 				// 
 				const int mergediff = optimize::clip_merge_dist(d, a, _b0, _b1, (out->length - clipped_length));
 				const int newlength = clipped_length + mergediff;
+				
+				if (newlength > out->length)
+				{
+					count_networks();
+					continue;
+				}
 				
 				DPRINT("merge diff = " << mergediff << " newlength = " << newlength << " prevlength=" << out->length);
 				
@@ -351,7 +356,7 @@ namespace tbr
 				
 				network::insert(bisected, src1, src2, src_calc_root);
 				optimize::ultranode(bisected, src_calc_root);
-				optimize::reoptimize(bisected, src_calc_root);
+				optimize::reoptimize_final(bisected, optimized, src_calc_root);
 				network::disconnect(bisected, src_calc_root);
 				network::node_free(bisected, src_calc_root);
 				
