@@ -57,7 +57,7 @@ namespace smart
 			for (int i=0;i<out.count;i+=2)
 			{
 				network::insert(t, out.pairs[i], out.pairs[i+1], taxons[pick]);
-				int d = optimize::optimize(t, t1);
+				int d = optimize::optimize(t, t1, false);
 				if (d < min)
 				{
 					min = d;

@@ -11,18 +11,18 @@
 //#define DPRINT(x) { std::cout << x << std::endl; }
 #define DPRINT(x) {};
 
-#define USE_SIMD
-
 namespace optimize
 {
-	enum {
+	enum
+	{
 		BUFSIZE  = 65768, // char group * taxa limit
 		MAX_CHARACTERS = 2048
 	};
 	
 	#define BLOCKSIZE 16
 	
-	enum {
+	enum
+	{
 		MAX_PACKUNITS = MAX_CHARACTERS / BLOCKSIZE
 	};
 	
@@ -33,8 +33,9 @@ namespace optimize
 	struct cgroup_data
 	{
 		int count;
-		int packunits;
-		int memwidth;
+		int taxonwidth;
+		int bufsize;
+		
 		st_t ostate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
 		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
@@ -60,58 +61,15 @@ namespace optimize
 			
 		return 1 << val;
 	}
-
-	// ----------------------- 
-	// 
-	//	
-	int is_single[256];
-	int mindist[256];
-
 	void init()
 	{
-		for (int i=0;i<256;i++)
-			is_single[i] = -1;
-		for (int i=0;i<8;i++)
-			is_single[1 << i] = i;
-			
-		for (int i=0;i<256;i++)
-		{
-			mindist[i] = 8;
-			for (int a=0;a<8;a++)
-			{
-				for (int b=a+1;b<8;b++)
-				{
-					if (((1 << a) & i) && ((1 << b) & i))
-					{
-						int d = a - b;
-						if (d < 0) d = -d;
-						if (mindist[i] > d)
-							mindist[i] = d;
-					}
-				}
-			}
-		}
+	
 	}
 	
 	inline int num_units(int count)
 	{
 		return ((count + BLOCKSIZE - 1) / BLOCKSIZE);
 	}
-
-	inline int mem_width(int count)
-	{
-		return num_units(count) * BLOCKSIZE;
-	}
-
-	struct tmpsort
-	{
-		int val;
-		int idx;
-		bool operator<(const tmpsort &b) const
-		{
-			return val < b.val;
-		} 
-	};	
 	
 	// Converts the values in the matrix into bit forms like this
 	//
@@ -122,67 +80,48 @@ namespace optimize
 	void optimize_cgroups(matrix::cgroup *source, cgroup_data *out, int maxnodes, int taxons)
 	{
 		out->count = source->count;
-		
-		
-		// one row is
-		//              T0   T1   T2   T3   T4
-		// CHARBLOCK0   ABCD ABCD ABCD ABCD ABCD
-		// CHARBLOCK1   EFGH EFGH EFGH EFGH EFGH
-		// CHARBLOCK3   IJ00 IJ00 IJ00 IJ00 IJ00
-		//
-		// memwidth=    ------------------------   = BLOCKSIZE * taxons
-		// memwidth * packunits = total matrix size
-		
-		out->memwidth = BLOCKSIZE * maxnodes;
-		out->packunits = num_units(out->count);
 
-		if (out->memwidth * out->packunits > BUFSIZE)
+		//		
+		out->taxonwidth = num_units(out->count) * BLOCKSIZE;
+		out->bufsize = out->taxonwidth * maxnodes;
+
+		if (out->bufsize > BUFSIZE)
 		{
-			std::cout << "packunits:" << out->packunits <<  " memwidth=" << out->memwidth << std::endl;
-			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->memwidth * out->packunits << std::endl;
+			std::cerr << "Bump BUFSIZE in optimize.cpp to at least " << out->bufsize << std::endl;
 			exit(-1);
 		}
-		if (out->packunits * BLOCKSIZE > MAX_CHARACTERS)
+		if (source->count > MAX_CHARACTERS)
 		{
 			std::cerr << "Bump MAX_CHARACTERS in optimize.cpp to at least " << source->count << std::endl;
 			exit(-1);
 		}
-		if (out->packunits > MAX_PACKUNITS)
-		{
-			std::cerr << "Check calculation of MAX_PACKUNITS in optimize.cpp" << std::endl;
-			exit(-1);
-		}
 
-		memset(out->ostate, 0x0F, out->memwidth * out->packunits);
-		memset(out->pstate, 0x0F, out->memwidth * out->packunits);
-		memset(out->fstate, 0x0F, out->memwidth * out->packunits);
-		memset(out->weights, 0x00, out->packunits * BLOCKSIZE);
+		memset(out->ostate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
+		memset(out->pstate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
+		memset(out->fstate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
+		memset(out->weights, 0x00, out->taxonwidth);
 
-		for (unsigned int i=0;i<out->packunits;i++)
+		for (unsigned t=0;t<taxons;t++)
 		{
-			int count = std::min<int>(BLOCKSIZE, out->count - i*BLOCKSIZE);
-			for (unsigned t=0;t<taxons;t++)
-			{
-				for (int p=0;p<count;p++)
-				{
-					unsigned int mtxofs = (i * BLOCKSIZE + p) * taxons + t;
-					out->ostate[i * out->memwidth + BLOCKSIZE * t + p] = mask(source->submatrix[mtxofs]);
-				}
-			}
 			for (int p=0;p<out->count;p++)
-				out->weights[i*BLOCKSIZE+p] = 1;
+			{
+				unsigned int mtxofs = p * taxons + t;
+				out->ostate[t * out->taxonwidth + p] = mask(source->submatrix[mtxofs]);
+			}
 		}
+		for (int p=0;p<out->taxonwidth;p++)
+			out->weights[p] = 1;
 	}
 	
 	void copy_cgroup(cgroup_data *target, cgroup_data *source)
 	{
-		target->memwidth = source->memwidth;
-		target->packunits = source->packunits;
 		target->count = source->count;
-		memcpy(target->ostate, source->ostate, source->memwidth * source->packunits);
-		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
-		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
-		for (unsigned int i=0;i<source->packunits*BLOCKSIZE;i++)
+		target->bufsize = source->bufsize;
+		target->taxonwidth = source->taxonwidth;
+		memcpy(target->ostate, source->ostate, source->bufsize);
+		memcpy(target->pstate, source->pstate, source->bufsize);
+		memcpy(target->fstate, source->fstate, source->bufsize);
+		for (unsigned int i=0;i<source->taxonwidth;i++)
 			target->weights[i] = source->weights[i];
 	}
 	
@@ -202,53 +141,36 @@ namespace optimize
 		}
 		return st;
 	}
-	
-	char to_char(st_t x)
-	{
-		if (x == 0xff)
-			return '?';
-		else 
-		{
-			int v = is_single[x];
-			if (v != -1)
-				return '0' + v;
-			else
-				return 'X';
-		}
-	}
-	
+		
 	void print_cgroup(cgroup_data *cd, int maxnodes, int taxons)
 	{
 		for (int t=0;t<taxons;t++)
 		{
 			std::cout.width(3);
 			std::cout << t << " f => ";
-			for (int i=0;i<cd->packunits;i++)
+
+			const int tw = cd->taxonwidth;
+			
+			for (int j=0;j<tw;j++)
 			{
-				for (unsigned int j=0;j<BLOCKSIZE;j++)
-				{
-					std::cout.width(1);
-					std::cout << (int)(cd->fstate[i * cd->memwidth + BLOCKSIZE * t + j]);
-				}
+				std::cout.width(1);
+				std::cout << (int)(cd->fstate[t * tw + j]);
 			}
+			
 			std::cout << " p => ";
-			for (int i=0;i<cd->packunits;i++)
+			for (int j=0;j<tw;j++)
 			{
-				for (unsigned int j=0;j<BLOCKSIZE;j++)
-				{
-					std::cout.width(1);
-					std::cout << (int)(cd->pstate[i * cd->memwidth + BLOCKSIZE * t + j]);
-				}
+				std::cout.width(1);
+				std::cout << (int)(cd->pstate[t * tw + j]);
 			}
+
 			std::cout << " o => ";
-			for (int i=0;i<cd->packunits;i++)
+			for (int j=0;j<tw;j++)
 			{
-				for (unsigned int j=0;j<BLOCKSIZE;j++)
-				{
-					std::cout.width(1);
-					std::cout << (int)(cd->ostate[i * cd->memwidth + BLOCKSIZE * t + j]);
-				}
+				std::cout.width(1);
+				std::cout << (int)(cd->ostate[t * tw + j]);
 			}
+
 			std::cout << std::endl;
 
 		}
@@ -276,7 +198,7 @@ namespace optimize
 	
 	
 	// Fitch single character final pass
-	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd, int i)
+	int single_unordered_character_final_pass(int root, int maxnodes, int taxons, network::node *net, cgroup_data *cd)
 	{
 		int queue;
 		int ancestor[1024];
@@ -284,12 +206,13 @@ namespace optimize
 		
 		DPRINT("Final pass from root [" << root << "] taxons=" << taxons);
 
-		st_t *F = &cd->fstate[cd->memwidth * i];
-		st_t *P = &cd->pstate[cd->memwidth * i];
+		st_t *FF = cd->fstate;
+		st_t *PP = cd->pstate;
+
+		const int tw = cd->taxonwidth;
 		
-		for (int j=0;j<BLOCKSIZE;j++)
-			F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
-			
+		memcpy(&FF[tw * root], &PP[tw * root], tw);
+
 		ancestor[0] = root;
 		node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
 		if (node[0] < 0)
@@ -297,35 +220,25 @@ namespace optimize
 		
 		queue = 0; 
 		
-		DPRINT(" character(" << i << "), root=" << root << " fin_ancestor=" << (int)P[root]);
-		DPRINT(" first node=" << node[0]);
-		
 		int taxp[1024];
 		int taxp_count = 2; 
 		taxp[0] = root;
 		taxp[1] = node[0];
 		
-		const int in_ofs = cd->memwidth * i;
-		
 		while (queue >= 0)
 		{
 			const int me = node[queue];
 			const int anc = ancestor[queue];
-			
-			st_t *FF = &cd->fstate[in_ofs];
-			st_t *PP = &cd->pstate[in_ofs];
-		
-			const int blkAncestor = BLOCKSIZE * anc;
-			const int blkMe = BLOCKSIZE * me;
-			
 			const int kid0 = net[me].c1;
 			const int kid1 = net[me].c2;
-			
-			const int blkKid0 = BLOCKSIZE * kid0;
-			const int blkKid1 = BLOCKSIZE * kid1;
-			
-			#if defined(USE_SIMD)
-						
+
+			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
+			{
+				const int blkAncestor = tw * anc + cp;
+				const	int blkMe = tw * me + cp;
+				const int blkKid0 = tw * kid0 + cp;
+				const int blkKid1 = tw * kid1 + cp;
+
 				__m128i ppMe = _mm_load_si128((__m128i*)&PP[blkMe]);
 				__m128i fa = _mm_load_si128((__m128i*)&FF[blkAncestor]);
 				__m128i pp0 = _mm_load_si128((__m128i*)&PP[blkKid0]);
@@ -350,40 +263,8 @@ namespace optimize
 									     _mm_and_si128(cmpOuter, fme));
 			
 				_mm_store_si128((__m128i*)&FF[blkMe], totalResult);
-
-
-			#else
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					const int fa = FF[blkAncestor];
-					const int pp0 = PP[blkKid0];
-					const int pp1 = PP[blkKid1];
-					const int ppMe = PP[blkMe];
-					const int parent_share = (pp0 | pp1) & fa;
-					
-					const int subopt1 = ppMe | parent_share;
-					const int subopt2 = ppMe | fa;
-					int fme = ppMe & fa;
-					
-					if (fme != fa)
-					{
-						if (pp0 & pp1)
-						{
-							fme = subopt1;
-						}
-						else
-						{
-							fme = subopt2;
-						}
-					}
-					
-					FF[blkMe] = fme;
-					
-					FF++;
-					PP++;
-				}
-			#endif
-							
+			}
+										
 			queue--;
 			
 			if (kid0 >= taxons)
@@ -415,415 +296,93 @@ namespace optimize
 		// Need to treat terminal nodes specially when they can have ? in them
 		for (int A=0;A<taxp_count;A+=2)
 		{
-			const int r = BLOCKSIZE * taxp[A];
-			const int p = BLOCKSIZE * taxp[A+1];
-
-#if defined(USE_SIMD)
-			__m128i zero = _mm_setzero_si128();
-	
-			__m128i PR = _mm_load_si128((__m128i*)&P[r]);
-			__m128i FP = _mm_load_si128((__m128i*)&F[p]);
-			__m128i f_root = _mm_and_si128(PR, FP);
-			__m128i cmp = _mm_cmpeq_epi8(f_root, zero);
-			__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
-								     _mm_and_si128(cmp, PR));
-			_mm_store_si128((__m128i*)&F[r], totalResult);
-
-#else
-			for (int j=0;j<BLOCKSIZE;j++)
+			const int r = tw * taxp[A];
+			const int p = tw * taxp[A+1];
+			for (int cp=0;cp<tw;cp+=BLOCKSIZE)
 			{
-				int f_root = P[r + j] & F[p + j];
-				if (!f_root)
-					f_root = P[r + j];
-					
-				// these give the multi-state characters their final values
-				// at least for now this is how those ? are treated, they get
-				// final values here
-				F[r + j] = f_root;
-			}
-#endif
-
-		}
-				
-		return 0;
-	}
-
-	// Fitch single character final pass
-	int final_state_reoptimization(int root, int taxons, network::node *net, cgroup_data *cd, cgroup_data *ref, int i, bool is_tree_root=true, bool *allowSkipMask=0)
-	{
-		int queue;
-		int ancestor[1024];
-		int node[1024];
-		
-		st_t *F = &cd->fstate[cd->memwidth * i];
-		st_t *P = &cd->pstate[cd->memwidth * i];
-		st_t *FREF = &ref->fstate[cd->memwidth * i];
-
-		int taxp[1024];
-		int taxp_count = 0; 
-		
-		if (is_tree_root)
-		{
-			for (int j=0;j<BLOCKSIZE;j++)
-				F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
-				
-			ancestor[0] = root;
-			node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
-			if (node[0] < 0)
-				node[0] = net[root].c0;
-				
-			taxp[0] = root;
-			taxp[1] = node[0];
-			taxp_count = 2;
-			queue = 0;
-		}
-		else
-		{
-			for (int j=0;j<BLOCKSIZE;j++)
-				F[BLOCKSIZE * root + j] = FREF[BLOCKSIZE * root + j];
-
-			queue = -1;
-
-			// need to put things in right queue
-			int kids[2] = {net[root].c1, net[root].c2};
-			for (int k=0;k<2;k++)
-			{
-				if (kids[k] >= taxons)
-				{
-					queue++;
-					ancestor[queue] = root;
-					node[queue] = kids[k];
-				}
-				else if (kids[k] >= 0)
-				{
-					taxp[taxp_count] = kids[k];
-					taxp[taxp_count+1] = root;
-					taxp_count += 2;
-				}
-			}
-		}
-	
-		while (queue >= 0)
-		{
-			const int me = node[queue];
-			const int anc = ancestor[queue];
-		
-			const int blkAncestor = BLOCKSIZE * anc;
-			const int blkMe = BLOCKSIZE * me;
-			
-			const int kid0 = net[me].c1;
-			const int kid1 = net[me].c2;
-			
-			const int blkKid0 = BLOCKSIZE * kid0;
-			const int blkKid1 = BLOCKSIZE * kid1;
-			
-			#if defined(USE_SIMD)
-			
-				__m128i ppMe = _mm_load_si128((__m128i*)&P[blkMe]);
-				__m128i fa = _mm_load_si128((__m128i*)&F[blkAncestor]);
-				__m128i pp0 = _mm_load_si128((__m128i*)&P[blkKid0]);
-				__m128i pp1 = _mm_load_si128((__m128i*)&P[blkKid1]);
-				__m128i fme = _mm_and_si128(ppMe, fa);
-				__m128i fref = _mm_load_si128((__m128i*)&FREF[blkMe]);
-				
-				__m128i cmpOuter = _mm_cmpeq_epi8(fme, fa);
-				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
-				
 				__m128i zero = _mm_setzero_si128();
-				__m128i cmpInner = _mm_cmpeq_epi8(_mm_and_si128(pp0, pp1), zero);
-
-				__m128i subopt1 = _mm_or_si128(ppMe, parent_share);
-				__m128i subopt2 = _mm_or_si128(ppMe, fa);
-				
-				// result of inner statement
-				__m128i innerResult = _mm_or_si128(_mm_andnot_si128(cmpInner, subopt1),
-				                                   _mm_and_si128(cmpInner, subopt2));
-	
-				__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmpOuter, innerResult),
-									     _mm_and_si128(cmpOuter, fme));
-			
-				_mm_store_si128((__m128i*)&F[blkMe], totalResult);
-
-				__m128i vcmp = (__m128i)_mm_cmpeq_ps((__m128)fref, (__m128)totalResult);
-				
-				if ( _mm_movemask_epi8(vcmp) == 0xffff)
-				{
-					if (!allowSkipMask || allowSkipMask[me])
-					{
-						--queue;
-						continue;
-					}
-				}
-			#endif
-
-			// Add kids			
-			queue--;
-
-			if (kid0 >= taxons)
-			{
-				queue++;
-				ancestor[queue] = me;
-				node[queue] = kid0;
+				__m128i PR = _mm_load_si128((__m128i*)&PP[r + cp]);
+				__m128i FP = _mm_load_si128((__m128i*)&FF[p + cp]);
+				__m128i f_root = _mm_and_si128(PR, FP);
+				__m128i cmp = _mm_cmpeq_epi8(f_root, zero);
+				__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
+									     _mm_and_si128(cmp, PR));
+				_mm_store_si128((__m128i*)&FF[r + cp], totalResult);
 			}
-			else if (kid0 >= 0)
-			{
-				taxp[taxp_count] = kid0;				
-				taxp[taxp_count+1] = me;
-				taxp_count += 2;
-			}
-			if (kid1 >= taxons)
-			{
-				queue++;
-				ancestor[queue] = me;
-				node[queue] = kid1;
-			}
-			else if (kid1 >= 0)
-			{
-				taxp[taxp_count] = kid1;
-				taxp[taxp_count+1] = me;
-				taxp_count += 2;
-			}
-		}
-		
-		// Need to treat terminal nodes specially when they can have ? in them
-		for (int A=0;A<taxp_count;A+=2)
-		{
-			const int r = BLOCKSIZE * taxp[A];
-			const int p = BLOCKSIZE * taxp[A+1];
-
-#if defined(USE_SIMD)
-			__m128i zero = _mm_setzero_si128();
-	
-			__m128i PR = _mm_load_si128((__m128i*)&P[r]);
-			__m128i FP = _mm_load_si128((__m128i*)&F[p]);
-			__m128i f_root = _mm_and_si128(PR, FP);
-			__m128i cmp = _mm_cmpeq_epi8(f_root, zero);
-			__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
-								     _mm_and_si128(cmp, PR));
-			_mm_store_si128((__m128i*)&F[r], totalResult);
-#else
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				int f_root = P[r + j] & F[p + j];
-				if (!f_root)
-					f_root = P[r + j];
-					
-				// these give the multi-state characters their final values
-				// at least for now this is how those ? are treated, they get
-				// final values here
-				
-				F[r + j] = f_root;
-			}
-#endif
-
 		}
 				
 		return 0;
-	}
-
-
-
-	void reopt_source_root(cgroup_data *cd, int root, int rootHTU, int i)
-	{
-		st_t *prow = &cd->pstate[cd->memwidth * i];
-		for (int j=0;j<BLOCKSIZE;j++)
-		{
-			int rv = prow[rootHTU*BLOCKSIZE+j] & 0xff; //prow[root*BLOCKSIZE+j];
-			if (!rv)
-			{
-				rv = prow[root*BLOCKSIZE+j];
-			}
-			prow[root*BLOCKSIZE+j] = rv;
-		}
 	}
 	
 	// Fitch single character first pass
-	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd, int i)
+	int single_unordered_character_first_pass_calc_length(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd)
 	{
 		int sum = 0;
 		const int *bp = fpo;
 		
 		// offset to the right row into the submatrix table
-		st_t *prow = &cd->pstate[cd->memwidth * i];
-		
-		#if defined(USE_SIMD)
-		
-			__m128i grandtot = _mm_setzero_si128();
-			__m128i zero = _mm_setzero_si128();
-			__m128i cmp = _mm_setzero_si128();
+		st_t *pstate = cd->pstate;
 
-			int n = bp[0];
-			int c1 = bp[1];
-			int c2 = bp[2];
-							
-			while (n != -1)
+		__m128i zero = _mm_setzero_si128();
+		__m128i cmp = _mm_setzero_si128();
+
+		int n = bp[0];
+		int c1 = bp[1];
+		int c2 = bp[2];
+
+		signed char tmp[MAX_CHARACTERS];
+		memset(tmp, 0x00, MAX_CHARACTERS);
+		
+		const int tw = cd->taxonwidth;
+						
+		while (n != -1)
+		{
+			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
 			{
-				__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
-				__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
-				
-				c1 = bp[3+1];
-				c2 = bp[3+2];
-				const int resaddr = n*BLOCKSIZE;
+				const int resaddr = n * cd->taxonwidth + cp;
+				__m128i a = _mm_load_si128((__m128i*)&pstate[tw * c1 + cp]);
+				__m128i b = _mm_load_si128((__m128i*)&pstate[tw * c2 + cp]);
+				__m128i t = _mm_loadu_si128((__m128i*)&tmp[cp]);
 				
 				// interleaved here, cmp starts out at z for the first round
 				// and one extra at exit
-				grandtot = _mm_add_epi8(grandtot, cmp);
 			
 				__m128i v = _mm_and_si128(a, b);
-				
 				cmp = _mm_cmpeq_epi8(v, zero);
+				t = _mm_add_epi8(t, cmp);
 				
 				__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
 				__m128i alt2 = _mm_andnot_si128(cmp, v);
 				__m128i res = _mm_or_si128(alt1, alt2);
-				_mm_store_si128((__m128i*)&prow[resaddr], res);
-
-				n = bp[3];
-				bp += 3;
-			}
-
-			grandtot = _mm_add_epi8(grandtot, cmp);
-			
-			signed char tmp[BLOCKSIZE];
-			_mm_storeu_si128((__m128i*)tmp, grandtot);
-		
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-				if (!rv)
-				{
-					rv = prow[root*BLOCKSIZE+j];
-					tmp[j]--;
-				}
-				prow[root*BLOCKSIZE+j] = rv;
-				sum -= tmp[j] * cd->weights[i * BLOCKSIZE + j];
-			}			
-			
-		#else
-
-			int subsum[BLOCKSIZE] = {0};
-
-			while (bp[0] != -1)
-			{
-				const int n  = bp[0];
-				const int c1 = bp[1];
-				const int c2 = bp[2];
 				
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					const int a = prow[c1*BLOCKSIZE+j];
-					const int b = prow[c2*BLOCKSIZE+j];
-				
-					int v = a & b;
-					if (!v)
-					{
-						v = a | b;
-						++subsum[j];
-					}
-					
-					prow[n*BLOCKSIZE+j] = v;
-				}
-				
-				bp += 3;
+				_mm_store_si128((__m128i*)&pstate[resaddr], res);
+				_mm_storeu_si128((__m128i*)&tmp[cp], t);
 			}
-			
-			for (int j=0;j<BLOCKSIZE;j++)
+			c1 = bp[3+1];
+			c2 = bp[3+2];
+			n = bp[3];
+			bp += 3;
+		}
+
+		for (int j=0;j<cd->count;j++)
+		{
+			int rv = pstate[tw * rootHTU + j] & pstate[tw * root + j];
+			if (!rv)
 			{
-				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-				if (!rv)
-				{
-					rv = prow[root*BLOCKSIZE+j];
-					++subsum[j];
-					DPRINT("Diff at root (" << rootHTU << "/" << root << "), scor=" << sum);
-				}
-				prow[root*BLOCKSIZE+j] = rv;
-				sum += subsum[j] * cd->weights[i * BLOCKSIZE + j];
+				rv = pstate[tw * root + j];
+				tmp[j]--;
 			}
-		
-		#endif
+			pstate[tw * root + j] = rv;
+			sum -= tmp[j] * cd->weights[j];
+		}			
+			
 		return sum;
-	}
-
-	// Fitch single character first pass
-	int single_unordered_character_first_pass_reoptimize(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd, cgroup_data *ref, int i)
-	{
-		const int *bp = fpo;
-		
-		// offset to the right row into the submatrix table
-		st_t *prow = &cd->pstate[cd->memwidth * i];
-		st_t *refrow = &ref->pstate[cd->memwidth * i];
-		int lastChanged = -2;
-		
-		#if defined(USE_SIMD)
-			__m128i zero = _mm_setzero_si128();
-			__m128i cmp = _mm_setzero_si128();
-
-			int n = bp[0];
-			int c1 = bp[1];
-			int c2 = bp[2];
-							
-			while (n != -1)
-			{
-				__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
-				__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
-				__m128i ref = _mm_load_si128((__m128i*)&refrow[n*BLOCKSIZE]);
-				
-				const int resaddr = n*BLOCKSIZE;
-				
-				// interleaved here, cmp starts out at z for the first round
-				// and one extra at exit
-				__m128i v = _mm_and_si128(a, b);
-				cmp = _mm_cmpeq_epi8(v, zero);
-				__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
-				__m128i alt2 = _mm_andnot_si128(cmp, v);
-				__m128i res = _mm_or_si128(alt1, alt2);
-				
-				_mm_store_si128((__m128i*)&prow[resaddr], res);
-				
-				// results now agree
-				__m128i vcmp = (__m128i)_mm_cmpeq_ps((__m128)ref, (__m128)res);
-				if (_mm_movemask_epi8(vcmp) == 0xffff)
-				{
-					if (lastChanged == -1)
-					{
-						lastChanged = n;
-						break;
-					}
-					// We could break out here but since we reset taxon potential character states before, we can't
-					// and need to have those filled in by continuing up the tree. TODO: Fix this and clear/reset them only as we
-					// walk up the tree.
-				}
-				
-				n = bp[3];
-				c1 = bp[3+1];
-				c2 = bp[3+2];
-				
-				bp += 3;
-			}
-
-			for (int j=0;j<BLOCKSIZE;j++)
-			{
-				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
-				if (!rv)
-					rv = prow[root*BLOCKSIZE+j];
-				prow[root*BLOCKSIZE+j] = rv;
-			}			
-			
-		#else
-			std::cerr << "code more!" << std::endl;
-			exit(2);
-		#endif
-		
-		return lastChanged;
 	}
 
 	void ultranode(network::data *d, int node)
 	{
 		cgroup_data *cd = &d->opt->unordered;
-		for (int i=0;i<cd->packunits;i++)
-		{
-			memset(&cd->fstate[cd->memwidth * i + BLOCKSIZE * node], 0xff, BLOCKSIZE);
-		}
+		memset(&cd->fstate[cd->taxonwidth * node], 0xff, cd->taxonwidth);
 	}
 	
 	int clip_merge_dist_unordered(cgroup_data *cd, int maxnodes, int target_root, int t0, int t1, int max)
@@ -833,11 +392,10 @@ namespace optimize
 		// for all characters in this group
 		if (t1 != network::NOT_IN_NETWORK)
 		{
-			target_root *= BLOCKSIZE;
-			t0 *= BLOCKSIZE;
-			t1 *= BLOCKSIZE;
+			target_root *= cd->taxonwidth;
+			t0 *= cd->taxonwidth;
+			t1 *= cd->taxonwidth;
 
-			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
 			const __m128i vk0 = _mm_set1_epi8(0);
@@ -847,15 +405,15 @@ namespace optimize
 			// in the hope for better caching
 			if (t1 < t0)
 				std::swap(t0, t1);
-			
-			for (int i=0;i<cd->packunits;i++)
+
+			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
 			{
-				st_t *F = &cd->fstate[cd->memwidth * i];
+				st_t *F = &cd->fstate[cp];
 				__m128i ft0 = _mm_load_si128((__m128i*)&F[t0]); 
 				__m128i ft1 = _mm_load_si128((__m128i*)&F[t1]);
 				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
-				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
-								
+				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[cp]));
+						
 				__m128i rh1 = _mm_or_si128(ft0, ft1);
 				__m128i tot = _mm_and_si128(ftr, rh1);
 				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
@@ -867,56 +425,31 @@ namespace optimize
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
 				
-				if ((i & 5) == 5)
-				{
-					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-					if (_mm_cvtsi128_si32(supertot) > max)
-						return 100000;
-				}
+				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+				sum = _mm_cvtsi128_si32(supertot);
+				
+				if (sum > max)
+					return 100000;
 			}
-			
-			// and super sum
-			supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-			supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-			sum += _mm_cvtsi128_si32(supertot);
-			
-			#else
-			for (int i=0;i<cd->packunits;i++)
-			{		
-				st_t *P = &cd->pstate[cd->memwidth * i];
-				st_t *F = &cd->fstate[cd->memwidth * i];
-			
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					// offset to the right row into the submatrix table
-					if (!(F[target_root+j] & (F[t0+j] | F[t1+j])))
-					{
-						sum += cd->weights[i * BLOCKSIZE + j];
-					}
-				}
-			}
-			#endif
 		}
 		else
 		{
-			target_root *= BLOCKSIZE;
-			t0 *= BLOCKSIZE;
+			target_root *= cd->taxonwidth;
+			t0 *= cd->taxonwidth;
 	
-			#if defined(USE_SIMD)
 			__m128i zero = _mm_setzero_si128();
 			__m128i grandtot = _mm_set1_epi32(0);
 			const __m128i vk0 = _mm_set1_epi8(0);       
 			const __m128i vk1 = _mm_set1_epi16(1);
-			
 			__m128i supertot;
 			
-			
-			for (int i=0;i<cd->packunits;i++)
+			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
 			{
-				st_t *O = &cd->ostate[cd->memwidth * i];
-				st_t *F = &cd->fstate[cd->memwidth * i];
-				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[i * BLOCKSIZE]));
+				st_t *O = &cd->ostate[cp];
+				st_t *F = &cd->fstate[cp];
+				
+				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[cp]));
 				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
 				__m128i rh1 = _mm_load_si128((__m128i*)&O[t0]);
 				__m128i tot = _mm_and_si128(ftr, rh1);
@@ -928,35 +461,14 @@ namespace optimize
 				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
-
-				if ((i&3) == 0)
-				{
-					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-					if (_mm_cvtsi128_si32(supertot) > max)
-						return 100000;
-				}
-			}
-			
-			// here too
-			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-			grandtot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 4));
-			sum += _mm_cvtsi128_si32(supertot);
-			
-			#else			
-			for (int i=0;i<cd->packunits;i++)
-			{
-				st_t *O = &cd->ostate[cd->memwidth * i];
-				st_t *F = &cd->fstate[cd->memwidth * i];
-				for (int j=0;j<BLOCKSIZE;j++)
-				{
-					if (!(F[target_root+j] & O[t0+j]))
-					{
-						sum += cd->weights[BLOCKSIZE * i + j];
-					}
-				}
-			}
-			#endif
+				
+				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+				sum = _mm_cvtsi128_si32(supertot);
+				
+				if (sum > max)
+					return 100000;
+			}			
 		}
 		
 		return sum;
@@ -964,24 +476,19 @@ namespace optimize
 	
 	void prepare_source_tree_root_unordered(cgroup_data *cd, int maxnodes, int s0, int s1, int new_node)
 	{
-		new_node *= BLOCKSIZE;
-		s0 *= BLOCKSIZE;
-		s1 *= BLOCKSIZE;
+		const int tw = cd->taxonwidth;
+		new_node *= tw;
+		s0 *= tw;
+		s1 *= tw;
 		
-		for (int i=0;i<cd->packunits;i++)
+		for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
 		{
 			// offset to the right row into the submatrix table
-			st_t *F = &cd->fstate[cd->memwidth * i];
-			
-			#if defined(USE_SIMD)
-				__m128i a = _mm_load_si128((__m128i*)&F[s0]); 
-				__m128i b = _mm_load_si128((__m128i*)&F[s1]);
-				__m128i c = _mm_or_si128(a, b);
-				_mm_store_si128((__m128i*)&F[new_node], c);
-			#else
-				for (int j=0;j<BLOCKSIZE;j++)
-					F[new_node+j] = F[s0+j] | F[s1+j];
-			#endif
+			st_t *F = &cd->fstate[cp];
+			__m128i a = _mm_load_si128((__m128i*)&F[s0]);
+			__m128i b = _mm_load_si128((__m128i*)&F[s1]);
+			__m128i c = _mm_or_si128(a, b);
+			_mm_store_si128((__m128i*)&F[new_node], c);
 		}
 	}
 	
@@ -998,47 +505,31 @@ namespace optimize
 
 	void reset_taxons_states(cgroup_data *cd, int *first_pass_order, int taxons, int root, int root_htu)
 	{
-		for (int k=0;k<cd->packunits;k++)
+		for (int j=0;;j++)
 		{
-			for (int j=0;;j++)
-			{
-				int p = first_pass_order[j];
-				if (p == -1)
-					break;
-				
-				// The P values are fiddled with during computation, so restore all for all characters that are
-				// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
-				const int ofs = k * cd->memwidth + p * BLOCKSIZE;
+			int p = first_pass_order[j];
+			if (p == -1)
+				break;
 			
-				if (p < taxons)
-				{	
-				#if defined(USE_SIMD)
-					__m128i tmp = _mm_load_si128((__m128i*)&cd->ostate[ofs]);
-					_mm_store_si128((__m128i*)&cd->pstate[ofs], tmp);
-				#else		
-					memcpy(&cd->pstate[ofs], &cd->ostate[ofs], BLOCKSIZE);
-				#endif
-				}
-			}		
-			
-			// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
-			// node doesn't appear in the first_pass_order (because root has only 1 child)
-			const int ofs0 = k * cd->memwidth + root * BLOCKSIZE;
-			const int ofs1 = k * cd->memwidth + root_htu * BLOCKSIZE;
-			#if defined(USE_SIMD)
-				__m128i tmp0 = _mm_load_si128((__m128i*)&cd->ostate[ofs0]);
-				__m128i tmp1 = _mm_load_si128((__m128i*)&cd->ostate[ofs1]);
-				_mm_store_si128((__m128i*)&cd->pstate[ofs0], tmp0);
-				_mm_store_si128((__m128i*)&cd->pstate[ofs1], tmp1);
-			#else
-				memcpy(&cd->pstate[ofs0], &cd->ostate[ofs0], BLOCKSIZE);
-				memcpy(&cd->pstate[ofs1], &cd->ostate[ofs1], BLOCKSIZE);
-			#endif
-		}
+			// The P values are fiddled with during computation, so restore all for all characters that are
+			// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
+			const int ofs = p * cd->taxonwidth;
+		
+			if (p < taxons)
+				memcpy(&cd->pstate[ofs], &cd->ostate[ofs], cd->taxonwidth);
+		}		
+		
+		// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
+		// node doesn't appear in the first_pass_order (because root has only 1 child)
+		const int tw = cd->taxonwidth;
+		const int ofs0 = tw * root;
+		const int ofs1 = tw * root_htu;
+		memcpy(&cd->pstate[ofs0], &cd->ostate[ofs0], tw);
+		memcpy(&cd->pstate[ofs1], &cd->ostate[ofs1], tw);
 	}
 
 
-	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false, bool reoptimize = false)
+	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false)
 	{
 		st->root = root;
 
@@ -1060,28 +551,14 @@ namespace optimize
 		}
 
 
-		if (!reoptimize)
-		{
-			// Restore taxon nodes' pstate to o-state to properly deal with multistates.
-			//
-			
-			reset_taxons_states(&st->unordered, st->first_pass_order, d->mtx_taxons, root, root_htu);
-			
-			// This is not needed when reoptimizing the source tree in TBR since those values
-			// will be kept (wouldn't change anyway if we actually did a first re-pass).
-		} // end need-to-investigate block
+		// Restore taxon nodes' pstate to o-state to properly deal with multistates.
+		//
+		reset_taxons_states(&st->unordered, st->first_pass_order, d->mtx_taxons, root, root_htu);
 
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
 		
 		const int sum0 = 0;// single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->ordered);
-
-		int sum1 = 0;
-
-		if (!reoptimize)
-		{
-			for (int i=0;i<st->unordered.packunits;i++)
-				sum1 += single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered, i);
-		}
+		const int sum1 = single_unordered_character_first_pass_calc_length(st->first_pass_order, st->maxnodes, root, root_htu, &st->unordered);
 		
 		const int sum = sum0 + sum1;
 		
@@ -1089,118 +566,18 @@ namespace optimize
 		
 		if (write_final)
 		{
-			for (int i=0;i<st->unordered.packunits;i++)
-			{
-				single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered, i);
-			}
+			single_unordered_character_final_pass(root, st->maxnodes, d->mtx_taxons, st->net, &st->unordered);
 		}
-		
 
-		// -- lala lala --
 		return sum;
 	}
-	
-	void target_tree_reoptimization(network::data *data, network::data *ref, int calcroot, int start)
-	{
-		int fpo[1024];
-		int *fpo_out = fpo;
-		
-		optstate *st = data->opt;		
-		network::node *net = st->net;
-		network::treeify(data, calcroot, net, fpo);
-		
-		if (start < data->mtx_taxons)
-			start = net[start].c0;
 
-		bool skipMask[1024];
-		memset(skipMask, 0x1, data->allocnodes);
-
-		// construct traverse list from clip point all the way to the tree for 1st pass reopt
-		int cur = start;
-		int count = 0;
-		while (cur >= 0 && cur != calcroot)
-		{
-			skipMask[cur] = false;
-			fpo_out[0] = cur;
-			fpo_out[1] = net[cur].c1;
-			fpo_out[2] = net[cur].c2;
-			fpo_out += 3;
-			cur = net[cur].c0;		
-		}
-		
-		skipMask[calcroot] = false;
-
-		// ---
-		*fpo_out = -1;
-
-		//
-		const int root = calcroot;
-		int root_htu = net[root].c1;
-		if (root_htu < 0)
-			root_htu = net[root].c2;
-
-		reset_taxons_states(&st->unordered, fpo, data->mtx_taxons, root, root_htu);
-
-		// go up to the root
-		int topmost_i = -1;
-		int topmost = -1;
-		
-		for (int i=0;i<st->unordered.packunits;i++)
-		{
-			int t = single_unordered_character_first_pass_reoptimize(fpo, st->maxnodes, root, root_htu, &st->unordered, &ref->opt->unordered, i);
-
-			if (t < 0)
-				continue;
-				
-			// find out which was the topmost node changed
-			for (int k=0;fpo[k]!=-1;k+=3)
-			{
-				if (fpo[k] == t)
-				{
-					if (k > topmost_i)
-					{
-						topmost_i = k;
-						topmost = t;
-					}
-					break;
-				}
-			}
-		}
-		
-		if (topmost < 0)
-			topmost = calcroot;
-
-		for (int i=0;i<st->unordered.packunits;i++)
-			final_state_reoptimization(topmost, data->mtx_taxons, st->net, &data->opt->unordered, &ref->opt->unordered, i, topmost == calcroot, skipMask);
-
-	}
-
-	void reoptimize_final(network::data *data, network::data *ref, int root)	
-	{
-		network::treeify(data, root, ref->opt->net, ref->opt->first_pass_order);
-		optstate *st = data->opt;
-		
-		for (int i=0;i<ref->opt->unordered.packunits;i++)
-		{
-			if (!ref)
-				single_unordered_character_final_pass(root, st->maxnodes, data->mtx_taxons, st->net, &st->unordered, i);
-			else
-				final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
-		}
-	}
-	
 	void set_weight(optstate *st, int pos, int weight)
 	{
 		if (pos < st->unordered.count)
 		{
 			st->unordered.weights[pos] = weight;
 		}
-		/*
-		else
-		{
-			std::cerr << "Weight out of range, pos=" << pos << " < " << st->unordered.count << std::endl;
-		}
-		*/
 	}
 
 	void free(optstate *s)
@@ -1213,7 +590,7 @@ namespace optimize
 	character::distance_t optimize(network::data *data, int root, bool write_final)
 	{
 		DPRINT("[optimize] - First pass run to calculate length");
-		return optimize_for_tree(data->opt, data, root, write_final, 0);
+		return optimize_for_tree(data->opt, data, root, write_final);
 	}
 
 	void copy(optstate *target, optstate *source)

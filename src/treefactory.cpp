@@ -45,7 +45,7 @@ void rounds(network::data *net, int count, int method)
 				return;
 		}
 		
-		const int score = optimize::optimize(net);
+		const int score = optimize::optimize(net, 0, false);
 		results.push_back(score);
 		sum += score;
 	}
@@ -77,7 +77,7 @@ int main(int argc, const char **argv)
 	
 	network::data *net = network::alloc(mtx);
 
-	const int count = 2000;
+	const int count = 600;
 	rounds(net, count, 0);
 	rounds(net, count, 1);
 
