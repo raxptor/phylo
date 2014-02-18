@@ -524,7 +524,8 @@ namespace optimize
 				__m128i pp0 = _mm_load_si128((__m128i*)&P[blkKid0]);
 				__m128i pp1 = _mm_load_si128((__m128i*)&P[blkKid1]);
 				__m128i fme = _mm_and_si128(ppMe, fa);
-
+				__m128i fref = _mm_load_si128((__m128i*)&FREF[blkMe]);
+				
 				__m128i cmpOuter = _mm_cmpeq_epi8(fme, fa);
 				__m128i parent_share = _mm_and_si128(fa, _mm_or_si128(pp0, pp1));
 				
@@ -543,7 +544,6 @@ namespace optimize
 			
 				_mm_store_si128((__m128i*)&F[blkMe], totalResult);
 
-				__m128i fref = _mm_load_si128((__m128i*)&FREF[blkMe]);
 				__m128i vcmp = (__m128i)_mm_cmpeq_ps((__m128)fref, (__m128)totalResult);
 				
 				if ( _mm_movemask_epi8(vcmp) == 0xffff)
