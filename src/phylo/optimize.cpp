@@ -16,8 +16,8 @@
 namespace optimize
 {
 	enum {
-		BUFSIZE  = 32768, // char group * taxa limit
-		MAX_CHARACTERS = 1024
+		BUFSIZE  = 65768, // char group * taxa limit
+		MAX_CHARACTERS = 2048
 	};
 	
 	#define BLOCKSIZE 16
@@ -153,9 +153,9 @@ namespace optimize
 			exit(-1);
 		}
 
-		memset(out->ostate, 0x03, out->memwidth * out->packunits);
-		memset(out->pstate, 0x03, out->memwidth * out->packunits);
-		memset(out->fstate, 0x03, out->memwidth * out->packunits);
+		memset(out->ostate, 0x0F, out->memwidth * out->packunits);
+		memset(out->pstate, 0x0F, out->memwidth * out->packunits);
+		memset(out->fstate, 0x0F, out->memwidth * out->packunits);
 		memset(out->weights, 0x00, out->packunits * BLOCKSIZE);
 
 		for (unsigned int i=0;i<out->packunits;i++)
@@ -449,7 +449,7 @@ namespace optimize
 	}
 
 	// Fitch single character final pass
-	int final_state_reoptimization(int root, int taxons, network::node *net, cgroup_data *cd, cgroup_data *ref, int i)
+	int final_state_reoptimization(int root, int taxons, network::node *net, cgroup_data *cd, cgroup_data *ref, int i, bool is_tree_root=true, bool *allowSkipMask=0)
 	{
 		int queue;
 		int ancestor[1024];
@@ -458,21 +458,50 @@ namespace optimize
 		st_t *F = &cd->fstate[cd->memwidth * i];
 		st_t *P = &cd->pstate[cd->memwidth * i];
 		st_t *FREF = &ref->fstate[cd->memwidth * i];
-		
-		for (int j=0;j<BLOCKSIZE;j++)
-			F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
-			
-		ancestor[0] = root;
-		node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
-		if (node[0] < 0)
-			node[0] = net[root].c0;
-		
-		queue = 0; 
 
 		int taxp[1024];
-		int taxp_count = 2; 
-		taxp[0] = root;
-		taxp[1] = node[0];
+		int taxp_count = 0; 
+		
+		if (is_tree_root)
+		{
+			for (int j=0;j<BLOCKSIZE;j++)
+				F[BLOCKSIZE * root + j] = P[BLOCKSIZE * root + j];
+				
+			ancestor[0] = root;
+			node[0] = net[root].c1 >= 0 ? net[root].c1 : net[root].c2;
+			if (node[0] < 0)
+				node[0] = net[root].c0;
+				
+			taxp[0] = root;
+			taxp[1] = node[0];
+			taxp_count = 2;
+			queue = 0;
+		}
+		else
+		{
+			for (int j=0;j<BLOCKSIZE;j++)
+				F[BLOCKSIZE * root + j] = FREF[BLOCKSIZE * root + j];
+
+			queue = -1;
+
+			// need to put things in right queue
+			int kids[2] = {net[root].c1, net[root].c2};
+			for (int k=0;k<2;k++)
+			{
+				if (kids[k] >= taxons)
+				{
+					queue++;
+					ancestor[queue] = root;
+					node[queue] = kids[k];
+				}
+				else if (kids[k] >= 0)
+				{
+					taxp[taxp_count] = kids[k];
+					taxp[taxp_count+1] = root;
+					taxp_count += 2;
+				}
+			}
+		}
 	
 		while (queue >= 0)
 		{
@@ -519,8 +548,11 @@ namespace optimize
 				
 				if ( _mm_movemask_epi8(vcmp) == 0xffff)
 				{
-					--queue;
-					continue;
+					if (!allowSkipMask || allowSkipMask[me])
+					{
+						--queue;
+						continue;
+					}
 				}
 			#endif
 
@@ -569,7 +601,6 @@ namespace optimize
 			__m128i totalResult = _mm_or_si128(_mm_andnot_si128(cmp, f_root),
 								     _mm_and_si128(cmp, PR));
 			_mm_store_si128((__m128i*)&F[r], totalResult);
-
 #else
 			for (int j=0;j<BLOCKSIZE;j++)
 			{
@@ -580,6 +611,7 @@ namespace optimize
 				// these give the multi-state characters their final values
 				// at least for now this is how those ? are treated, they get
 				// final values here
+				
 				F[r + j] = f_root;
 			}
 #endif
@@ -710,6 +742,79 @@ namespace optimize
 		
 		#endif
 		return sum;
+	}
+
+	// Fitch single character first pass
+	int single_unordered_character_first_pass_reoptimize(int *fpo, int maxnodes, int root, int rootHTU, cgroup_data *cd, cgroup_data *ref, int i)
+	{
+		const int *bp = fpo;
+		
+		// offset to the right row into the submatrix table
+		st_t *prow = &cd->pstate[cd->memwidth * i];
+		st_t *refrow = &ref->pstate[cd->memwidth * i];
+		int lastChanged = -2;
+		
+		#if defined(USE_SIMD)
+			__m128i zero = _mm_setzero_si128();
+			__m128i cmp = _mm_setzero_si128();
+
+			int n = bp[0];
+			int c1 = bp[1];
+			int c2 = bp[2];
+							
+			while (n != -1)
+			{
+				__m128i a = _mm_load_si128((__m128i*)&prow[c1*BLOCKSIZE]); 
+				__m128i b = _mm_load_si128((__m128i*)&prow[c2*BLOCKSIZE]);
+				__m128i ref = _mm_load_si128((__m128i*)&refrow[n*BLOCKSIZE]);
+				
+				const int resaddr = n*BLOCKSIZE;
+				
+				// interleaved here, cmp starts out at z for the first round
+				// and one extra at exit
+				__m128i v = _mm_and_si128(a, b);
+				cmp = _mm_cmpeq_epi8(v, zero);
+				__m128i alt1 = _mm_and_si128(cmp, _mm_or_si128(a, b));
+				__m128i alt2 = _mm_andnot_si128(cmp, v);
+				__m128i res = _mm_or_si128(alt1, alt2);
+				
+				_mm_store_si128((__m128i*)&prow[resaddr], res);
+				
+				// results now agree
+				__m128i vcmp = (__m128i)_mm_cmpeq_ps((__m128)ref, (__m128)res);
+				if (_mm_movemask_epi8(vcmp) == 0xffff)
+				{
+					if (lastChanged == -1)
+					{
+						lastChanged = n;
+						break;
+					}
+					// We could break out here but since we reset taxon potential character states before, we can't
+					// and need to have those filled in by continuing up the tree. TODO: Fix this and clear/reset them only as we
+					// walk up the tree.
+				}
+				
+				n = bp[3];
+				c1 = bp[3+1];
+				c2 = bp[3+2];
+				
+				bp += 3;
+			}
+
+			for (int j=0;j<BLOCKSIZE;j++)
+			{
+				int rv = prow[rootHTU*BLOCKSIZE+j] & prow[root*BLOCKSIZE+j];
+				if (!rv)
+					rv = prow[root*BLOCKSIZE+j];
+				prow[root*BLOCKSIZE+j] = rv;
+			}			
+			
+		#else
+			std::cerr << "code more!" << std::endl;
+			exit(2);
+		#endif
+		
+		return lastChanged;
 	}
 
 	void ultranode(network::data *d, int node)
@@ -1007,25 +1112,27 @@ namespace optimize
 		if (start < data->mtx_taxons)
 			start = net[start].c0;
 
+		bool skipMask[1024];
+		memset(skipMask, 0x1, data->allocnodes);
+
 		// construct traverse list from clip point all the way to the tree for 1st pass reopt
 		int cur = start;
 		int count = 0;
 		while (cur >= 0 && cur != calcroot)
 		{
+			skipMask[cur] = false;
 			fpo_out[0] = cur;
 			fpo_out[1] = net[cur].c1;
 			fpo_out[2] = net[cur].c2;
 			fpo_out += 3;
-			
-			cur = net[cur].c0;
-			
-			if (fpo_out - fpo > 500)
-				*((int*)0) = 0;
+			cur = net[cur].c0;		
 		}
+		
+		skipMask[calcroot] = false;
 
 		// ---
 		*fpo_out = -1;
-		
+
 		//
 		const int root = calcroot;
 		int root_htu = net[root].c1;
@@ -1035,11 +1142,37 @@ namespace optimize
 		reset_taxons_states(&st->unordered, fpo, data->mtx_taxons, root, root_htu);
 
 		// go up to the root
+		int topmost_i = -1;
+		int topmost = -1;
+		
 		for (int i=0;i<st->unordered.packunits;i++)
-			single_unordered_character_first_pass_calc_length(fpo, st->maxnodes, root, root_htu, &st->unordered, i);
-			
+		{
+			int t = single_unordered_character_first_pass_reoptimize(fpo, st->maxnodes, root, root_htu, &st->unordered, &ref->opt->unordered, i);
+
+			if (t < 0)
+				continue;
+				
+			// find out which was the topmost node changed
+			for (int k=0;fpo[k]!=-1;k+=3)
+			{
+				if (fpo[k] == t)
+				{
+					if (k > topmost_i)
+					{
+						topmost_i = k;
+						topmost = t;
+					}
+					break;
+				}
+			}
+		}
+		
+		if (topmost < 0)
+			topmost = calcroot;
+
 		for (int i=0;i<st->unordered.packunits;i++)
-			single_unordered_character_final_pass(root, st->maxnodes, data->mtx_taxons, st->net, &st->unordered, i);
+			final_state_reoptimization(topmost, data->mtx_taxons, st->net, &data->opt->unordered, &ref->opt->unordered, i, topmost == calcroot, skipMask);
+
 	}
 
 	void reoptimize_final(network::data *data, network::data *ref, int root)	
