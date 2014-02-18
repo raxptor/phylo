@@ -580,7 +580,4 @@ namespace network
 		}
 		bottomup[tmpOrderOut] = -1;
 	}
-	
-
-	
 }

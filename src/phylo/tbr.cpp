@@ -19,7 +19,7 @@ namespace tbr
 	// This will recompute the results	
 	//
 	//#define CHECK_RESULTS
-	//#define CHECK_ALL_BEST
+	#define CHECK_ALL_BEST
 
 	enum
 	{
@@ -337,8 +337,11 @@ namespace tbr
 				
 				int tmpnode = tmp.pairs[i]; // free now
 
-				optimize::optimize(bisected, 0 , true);
+				// take the furthest down the tree
+				int where = (bisected->network[tgt1].c0 == tgt2 && tgt1 != 0) ? tgt1 : tgt2;
 				
+				optimize::target_tree_reoptimization(bisected, optimized, 0, where);
+
 				// NOTE: We want to preserve the pstate data for the source tree from the previous calculations.
 				// Which is impossible since they don't change as long as we pick the src_calc_root so that the tree
 				// looks exactly the same. There is further speed-ups by having this calc root end up with exactly the 

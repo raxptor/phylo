@@ -178,6 +178,7 @@ namespace optimize
 	{
 		target->memwidth = source->memwidth;
 		target->packunits = source->packunits;
+		target->count = source->count;
 		memcpy(target->ostate, source->ostate, source->memwidth * source->packunits);
 		memcpy(target->pstate, source->pstate, source->memwidth * source->packunits);
 		memcpy(target->fstate, source->fstate, source->memwidth * source->packunits);
@@ -890,6 +891,48 @@ namespace optimize
 		return clip_merge_dist_unordered(&d->opt->unordered, d->allocnodes, target_root, t0, t1, maxdist);
 	}
 
+	void reset_taxons_states(cgroup_data *cd, int *first_pass_order, int taxons, int root, int root_htu)
+	{
+		for (int k=0;k<cd->packunits;k++)
+		{
+			for (int j=0;;j++)
+			{
+				int p = first_pass_order[j];
+				if (p == -1)
+					break;
+				
+				// The P values are fiddled with during computation, so restore all for all characters that are
+				// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
+				const int ofs = k * cd->memwidth + p * BLOCKSIZE;
+			
+				if (p < taxons)
+				{	
+				#if defined(USE_SIMD)
+					__m128i tmp = _mm_load_si128((__m128i*)&cd->ostate[ofs]);
+					_mm_store_si128((__m128i*)&cd->pstate[ofs], tmp);
+				#else		
+					memcpy(&cd->pstate[ofs], &cd->ostate[ofs], BLOCKSIZE);
+				#endif
+				}
+			}		
+			
+			// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
+			// node doesn't appear in the first_pass_order (because root has only 1 child)
+			const int ofs0 = k * cd->memwidth + root * BLOCKSIZE;
+			const int ofs1 = k * cd->memwidth + root_htu * BLOCKSIZE;
+			#if defined(USE_SIMD)
+				__m128i tmp0 = _mm_load_si128((__m128i*)&cd->ostate[ofs0]);
+				__m128i tmp1 = _mm_load_si128((__m128i*)&cd->ostate[ofs1]);
+				_mm_store_si128((__m128i*)&cd->pstate[ofs0], tmp0);
+				_mm_store_si128((__m128i*)&cd->pstate[ofs1], tmp1);
+			#else
+				memcpy(&cd->pstate[ofs0], &cd->ostate[ofs0], BLOCKSIZE);
+				memcpy(&cd->pstate[ofs1], &cd->ostate[ofs1], BLOCKSIZE);
+			#endif
+		}
+	}
+
+
 	int optimize_for_tree(optstate *st, network::data *d, int root, bool write_final = false, bool reoptimize = false)
 	{
 		st->root = root;
@@ -916,45 +959,11 @@ namespace optimize
 		{
 			// Restore taxon nodes' pstate to o-state to properly deal with multistates.
 			//
+			
+			reset_taxons_states(&st->unordered, st->first_pass_order, d->mtx_taxons, root, root_htu);
+			
 			// This is not needed when reoptimizing the source tree in TBR since those values
 			// will be kept (wouldn't change anyway if we actually did a first re-pass).
-			for (int k=0;k<st->unordered.packunits;k++)
-			{
-				for (int j=0;;j++)
-				{
-					int p = st->first_pass_order[j];
-					if (p == -1)
-						break;
-					
-					// The P values are fiddled with during computation, so restore all for all characters that are
-					// being used in this tree (we could be dealing with a subtree so don't touch other nodes data) 
-					const int ofs = k * st->unordered.memwidth + p * BLOCKSIZE;
-				
-					if (p < d->mtx_taxons)
-					{	
-					#if defined(USE_SIMD)
-						__m128i tmp = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs]);
-						_mm_store_si128((__m128i*)&st->unordered.pstate[ofs], tmp);
-					#else		
-						memcpy(&st->unordered.pstate[ofs], &st->unordered.ostate[ofs], BLOCKSIZE);
-					#endif
-					}
-				}		
-				
-				// root isn't listed in this order list. root_htu covers case with a 2-node network where the second
-				// node doesn't appear in the first_pass_order (because root has only 1 child)
-				const int ofs0 = k * st->unordered.memwidth + root * BLOCKSIZE;
-				const int ofs1 = k * st->unordered.memwidth + root_htu * BLOCKSIZE;
-				#if defined(USE_SIMD)
-					__m128i tmp0 = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs0]);
-					__m128i tmp1 = _mm_load_si128((__m128i*)&st->unordered.ostate[ofs1]);
-					_mm_store_si128((__m128i*)&st->unordered.pstate[ofs0], tmp0);
-					_mm_store_si128((__m128i*)&st->unordered.pstate[ofs1], tmp1);
-				#else
-					memcpy(&st->unordered.pstate[ofs0], &st->unordered.ostate[ofs0], BLOCKSIZE);
-					memcpy(&st->unordered.pstate[ofs1], &st->unordered.ostate[ofs1], BLOCKSIZE);
-				#endif
-			}
 		} // end need-to-investigate block
 
 		DPRINT("Root=" << root << " rootHTU=" << root_htu);
@@ -985,14 +994,66 @@ namespace optimize
 		// -- lala lala --
 		return sum;
 	}
+	
+	void target_tree_reoptimization(network::data *data, network::data *ref, int calcroot, int start)
+	{
+		int fpo[1024];
+		int *fpo_out = fpo;
+		
+		optstate *st = data->opt;		
+		network::node *net = st->net;
+		network::treeify(data, calcroot, net, fpo);
+		
+		if (start < data->mtx_taxons)
+			start = net[start].c0;
 
-	character::distance_t reoptimize_final(network::data *data, network::data *ref, int root)	
+		// construct traverse list from clip point all the way to the tree for 1st pass reopt
+		int cur = start;
+		int count = 0;
+		while (cur >= 0 && cur != calcroot)
+		{
+			fpo_out[0] = cur;
+			fpo_out[1] = net[cur].c1;
+			fpo_out[2] = net[cur].c2;
+			fpo_out += 3;
+			
+			cur = net[cur].c0;
+			
+			if (fpo_out - fpo > 500)
+				*((int*)0) = 0;
+		}
+
+		// ---
+		*fpo_out = -1;
+		
+		//
+		const int root = calcroot;
+		int root_htu = net[root].c1;
+		if (root_htu < 0)
+			root_htu = net[root].c2;
+
+		reset_taxons_states(&st->unordered, fpo, data->mtx_taxons, root, root_htu);
+
+		// go up to the root
+		for (int i=0;i<st->unordered.packunits;i++)
+			single_unordered_character_first_pass_calc_length(fpo, st->maxnodes, root, root_htu, &st->unordered, i);
+			
+		for (int i=0;i<st->unordered.packunits;i++)
+			single_unordered_character_final_pass(root, st->maxnodes, data->mtx_taxons, st->net, &st->unordered, i);
+	}
+
+	void reoptimize_final(network::data *data, network::data *ref, int root)	
 	{
 		network::treeify(data, root, ref->opt->net, ref->opt->first_pass_order);
+		optstate *st = data->opt;
+		
 		for (int i=0;i<ref->opt->unordered.packunits;i++)
-			final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
-				
-		return 0;
+		{
+			if (!ref)
+				single_unordered_character_final_pass(root, st->maxnodes, data->mtx_taxons, st->net, &st->unordered, i);
+			else
+				final_state_reoptimization(root, data->mtx_taxons, ref->opt->net, &data->opt->unordered, &ref->opt->unordered, i);
+		}
 	}
 	
 	void set_weight(optstate *st, int pos, int weight)
