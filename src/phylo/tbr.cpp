@@ -340,9 +340,9 @@ namespace tbr
 				// take the furthest down the tree
 				int where = (bisected->network[tgt1].c0 == tgt2 && tgt1 != 0) ? tgt1 : tgt2;
 				
+				optimize::tbr_target_reoptimization(bisected, optimized, 0, where);
+		
 //				optimize::target_tree_reoptimization(bisected, optimized, 0, where);
-
-				optimize::optimize(bisected, 0, true);
 
 				// NOTE: We want to preserve the pstate data for the source tree from the previous calculations.
 				// Which is impossible since they don't change as long as we pick the src_calc_root so that the tree
@@ -361,9 +361,9 @@ namespace tbr
 				network::insert(bisected, src1, src2, src_calc_root);
 				optimize::ultranode(bisected, src_calc_root);
 				
-				optimize::optimize(bisected, src_calc_root, true);
-				
-				//optimize::reoptimize_final(bisected, optimized, src_calc_root);
+				optimize::tbr_source_reoptimization(bisected, optimized, src_calc_root);
+//				optimize::optimize(bisected, src_calc_root, true);
+		
 				network::disconnect(bisected, src_calc_root);
 				network::node_free(bisected, src_calc_root);
 				

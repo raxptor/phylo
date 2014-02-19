@@ -1,6 +1,7 @@
 #include "network.h"
 #include "character.h"
 #include "newick.h"
+#include "optimize.h"
 
 #include <emmintrin.h>
 
@@ -13,47 +14,6 @@
 
 namespace optimize
 {
-	enum
-	{
-		BUFSIZE  = 65768, // char group * taxa limit
-		MAX_CHARACTERS = 2048
-	};
-	
-	#define BLOCKSIZE 16
-	
-	enum
-	{
-		MAX_PACKUNITS = MAX_CHARACTERS / BLOCKSIZE
-	};
-	
-	typedef unsigned char st_t;
-	
-	// optimization state for a tree or subtree
-	
-	struct cgroup_data
-	{
-		int count;
-		int taxonwidth;
-		int bufsize;
-		
-		st_t ostate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
-		st_t pstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
-		st_t fstate[BUFSIZE] __attribute__ ((aligned(BLOCKSIZE)));
-		st_t weights[MAX_CHARACTERS] __attribute__ ((aligned(BLOCKSIZE)));
-	};
-	
-	struct optstate
-	{
-		int root, maxnodes;
-		int *first_pass_order;
-		
-		cgroup_data unordered;
-		cgroup_data ordered;
-		
-		network::node *net;
-		matrix::data *matrix;
-	};
-
 	inline char mask(int val)
 	{
 		if (val == character::UNKNOWN_CHAR_VALUE)
@@ -61,6 +21,7 @@ namespace optimize
 			
 		return 1 << val;
 	}
+	
 	void init()
 	{
 	
@@ -79,9 +40,8 @@ namespace optimize
 	// 
 	void optimize_cgroups(matrix::cgroup *source, cgroup_data *out, int maxnodes, int taxons)
 	{
+		//
 		out->count = source->count;
-
-		//		
 		out->taxonwidth = num_units(out->count) * BLOCKSIZE;
 		out->bufsize = out->taxonwidth * maxnodes;
 
@@ -95,10 +55,15 @@ namespace optimize
 			std::cerr << "Bump MAX_CHARACTERS in optimize.cpp to at least " << source->count << std::endl;
 			exit(-1);
 		}
+		if (maxnodes > MAX_NODES)
+		{
+			std::cerr << "Bump MAX_NODES in optimize.cpp to at least " << maxnodes << std::endl;
+			exit(-1);
+		}
 
-		memset(out->ostate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
-		memset(out->pstate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
-		memset(out->fstate, 0x0F, out->bufsize); //out->bufsize * out->packunits);
+		memset(out->ostate, 0xf, out->bufsize);
+		memset(out->pstate, 0xf, out->bufsize);
+		memset(out->fstate, 0xf, out->bufsize);
 		memset(out->weights, 0x00, out->taxonwidth);
 
 		for (unsigned t=0;t<taxons;t++)
@@ -109,6 +74,7 @@ namespace optimize
 				out->ostate[t * out->taxonwidth + p] = mask(source->submatrix[mtxofs]);
 			}
 		}
+		
 		for (int p=0;p<out->taxonwidth;p++)
 			out->weights[p] = 1;
 	}
@@ -403,12 +369,56 @@ namespace optimize
 			__m128i supertot;
 			
 			// in the hope for better caching
-			if (t1 < t0)
-				std::swap(t0, t1);
-
-			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
+			
+			int cp = 0;
+			for (;cp<(cd->taxonwidth-BLOCKSIZE);cp+=2*BLOCKSIZE)
 			{
 				st_t *F = &cd->fstate[cp];
+				
+				__m128i ft0 = _mm_load_si128((__m128i*)&F[t0]); 
+				__m128i ft1 = _mm_load_si128((__m128i*)&F[t1]);
+				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
+				__m128i wgh = _mm_load_si128((__m128i*)(&cd->weights[cp]));
+						
+				__m128i rh1 = _mm_or_si128(ft0, ft1);
+				__m128i tot = _mm_and_si128(ftr, rh1);
+				__m128i cmp = _mm_cmpeq_epi8(tot, zero);
+				__m128i subtot = _mm_and_si128(cmp, wgh);
+				
+				__m128i _ft0 = _mm_load_si128((__m128i*)&F[t0 + BLOCKSIZE]);
+				__m128i _ft1 = _mm_load_si128((__m128i*)&F[t1 + BLOCKSIZE]);
+				__m128i _ftr = _mm_load_si128((__m128i*)&F[target_root + BLOCKSIZE]);
+				__m128i _wgh = _mm_load_si128((__m128i*)(&cd->weights[cp + BLOCKSIZE]));
+								
+				__m128i vl = _mm_unpacklo_epi8(subtot, vk0);
+				__m128i vh = _mm_unpackhi_epi8(subtot, vk0);
+								
+				__m128i _rh1 = _mm_or_si128(_ft0, _ft1);
+				__m128i _tot = _mm_and_si128(_ftr, _rh1);
+				__m128i _cmp = _mm_cmpeq_epi8(_tot, zero);
+				__m128i _subtot = _mm_and_si128(_cmp, _wgh);
+				
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
+				
+				vl = _mm_unpacklo_epi8(_subtot, vk0);
+				vh = _mm_unpackhi_epi8(_subtot, vk0);
+				
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
+				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
+				
+				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+				sum = _mm_cvtsi128_si32(supertot);
+				
+				if (sum > max)
+					return 100000;
+			}
+			
+			if (cp < cd->taxonwidth)
+			{
+				st_t *F = &cd->fstate[cp];
+				
 				__m128i ft0 = _mm_load_si128((__m128i*)&F[t0]); 
 				__m128i ft1 = _mm_load_si128((__m128i*)&F[t1]);
 				__m128i ftr = _mm_load_si128((__m128i*)&F[target_root]);
@@ -425,13 +435,14 @@ namespace optimize
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vl, vk1));
 				grandtot = _mm_add_epi32(grandtot, _mm_madd_epi16(vh, vk1));
 				
-				supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
-				supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
-				sum = _mm_cvtsi128_si32(supertot);
+					supertot = _mm_add_epi32(grandtot, _mm_srli_si128(grandtot, 8));
+					supertot = _mm_add_epi32(supertot, _mm_srli_si128(supertot, 4));
+					sum = _mm_cvtsi128_si32(supertot);
 				
-				if (sum > max)
-					return 100000;
+					if (sum > max)
+						return 100000;
 			}
+			
 		}
 		else
 		{
@@ -444,6 +455,7 @@ namespace optimize
 			const __m128i vk1 = _mm_set1_epi16(1);
 			__m128i supertot;
 			
+			int k = 0;
 			for (int cp=0;cp<cd->taxonwidth;cp+=BLOCKSIZE)
 			{
 				st_t *O = &cd->ostate[cp];
