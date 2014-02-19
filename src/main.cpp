@@ -30,6 +30,19 @@ void help()
 	exit(0);
 }
 
+namespace tbr { extern long long networks; }
+
+void print_result(tbr::output *out)
+{
+	std::cout << std::endl;
+	std::cout << "Done. I have " << out->equal_length.size() << " networks of length " << out->length << std::endl;
+	for (int i=0;i<out->newick.size()&&i<200;i++)
+		std::cout << out->newick[i] << std::endl;
+		
+	std::cout << "Networks searched: " << (tbr::networks/1000000) << "M" << std::endl;
+	std::cout << "Printed networks are of length " << out->length << std::endl;
+}
+
 int main(int argc, const char **argv)
 {
 	const char *method = 0;
@@ -42,6 +55,7 @@ int main(int argc, const char **argv)
 	
 	// arguments with arguments
 	int bound = -1;
+	int rounds = 10;
 	int c;
 	for (c=1;c<argc-1;c++)
 	{
@@ -53,6 +67,11 @@ int main(int argc, const char **argv)
 		else if (!strcmp(argv[c], "--bound"))
 		{
 			bound = atoi(argv[c+1]);
+			c++;
+		}
+		else if (!strcmp(argv[c], "--rounds"))
+		{
+			rounds = atoi(argv[c+1]);
 			c++;
 		}
 		else if (!strcmp(argv[c], "--seed"))
@@ -122,8 +141,20 @@ int main(int argc, const char **argv)
 		tbr::output output;
 		output.best_network = network::alloc(mtx);
 		network::copy(output.best_network, tmp);
+		output.length = optimize::optimize(output.best_network);
 		
-		std::cout << "One round of tbr produced " << output.equal_length.size() << " trees of equal length (" << output.length << ")" << std::endl;
+		for (int i=0;i<rounds;i++)
+		{
+			smart::make_inplace(tmp);
+			while (tbr::run(tmp, &output))
+			{
+				network::copy(tmp, output.best_network);
+			}
+		}
+		
+		network::copy(output.best_network, tmp);
+		
+		print_result(&output);
 	}
 
 	if (method && !strcmp(method, "ratchet"))
@@ -142,7 +173,7 @@ int main(int argc, const char **argv)
 
 		int maxnew = 10;
 		
-		for (int i=0;i<10000/num;i++)
+		for (int i=0;i<rounds/num;i++)
 		{
 			int oc = out.equal_length.size();
 			
@@ -204,15 +235,7 @@ int main(int argc, const char **argv)
 				std::cout << "[ratchet] - i have " << out.equal_length.size() << " of the same length (" << out.length << ")" << std::endl;
 			}
 		}
-
-		std::cout << std::endl;
-		std::cout << "Done. I have " << out.equal_length.size() << " networks of length " << out.length << std::endl;
-		
-		std::set<std::string>::iterator i = out.equal_length.begin();
-		
-		int max = 200;
-		while (i != out.equal_length.end() && --max > 0)
-			std::cout << (*i++) << std::endl;
+		print_result(&out);
 	}
 	
 	matrix::free(mtx);	

@@ -211,8 +211,10 @@ namespace tbr
 					
 					DPRINT("sorted is " << treebuf);
 					
+					out->newick.clear();
 					out->equal_length.clear();
 					out->equal_length.insert(treebuf);
+					out->newick.push_back(newick::from_network(target, 0));
 				}
 				else if (newlength == out->length)
 				{
@@ -240,7 +242,11 @@ namespace tbr
 					
 					DPRINT("sorted is " << treebuf);
 					
+					unsigned int oldcount = out->equal_length.size();
 					out->equal_length.insert(treebuf);
+					
+					if (oldcount != out->equal_length.size())
+						out->newick.push_back(newick::from_network(d, 0));
 					
 					if (rand_u32()%3==0)
 						network::copy(out->best_network, d);

@@ -134,6 +134,7 @@ namespace optimize
 	// Fitch single character final pass
 	void final_state_reoptimization(int root, int taxons, network::node *net, cgroup_data *cd, cgroup_data *ref, bool is_tree_root=true, bool *allowSkipMask=0)
 	{
+		
 		fsro fs;
 		
 		fs.tw = cd->taxonwidth;
@@ -274,15 +275,24 @@ namespace optimize
 
 	void tbr_target_reoptimization(network::data *data, network::data *ref, int calcroot, int start)
 	{
+	
 		int fpo[1024];
 		int *fpo_out = fpo;
 		
 		optstate *st = data->opt;		
 		network::node *net = st->net;
 		network::treeify(data, calcroot, net, fpo);
+
 		
 		if (start < data->mtx_taxons)
-			start = net[start].c0;
+		{
+			if (net[start].c0 != -1)
+				start = net[start].c0;
+			else if (net[start].c1 != -1)
+				start = net[start].c1;
+			else
+				start = net[start].c2;
+		}
 
 		bool skipMask[1024];
 		memset(skipMask, 0x1, data->allocnodes);

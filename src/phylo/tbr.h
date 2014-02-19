@@ -3,6 +3,7 @@
 
 #include <string>
 #include <set>
+#include <vector>
 
 namespace network { struct data; }
 
@@ -12,6 +13,7 @@ namespace tbr
 	{
 		network::data *best_network;
 		std::set<std::string> equal_length;
+		std::vector<std::string> newick;
 		unsigned int length;
 	};
 
